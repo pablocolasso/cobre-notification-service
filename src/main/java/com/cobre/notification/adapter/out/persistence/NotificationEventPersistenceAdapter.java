@@ -6,7 +6,9 @@ import com.cobre.notification.application.port.out.DeliveryRepository;
 import com.cobre.notification.application.port.out.ExpiredLease;
 import com.cobre.notification.application.port.out.LeaseRecovery;
 import com.cobre.notification.application.port.out.NotificationEventRepository;
+import com.cobre.notification.application.port.out.ReplayCommand;
 import com.cobre.notification.domain.model.AttemptTrigger;
+import com.cobre.notification.domain.model.DeliveryAttempt;
 import com.cobre.notification.domain.model.DeliveryDecision;
 import com.cobre.notification.domain.model.DeliveryError;
 import com.cobre.notification.domain.model.DeliveryTask;
@@ -42,11 +44,13 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                         INSERT INTO notification_events
                             (id, event_id, subscription_id, client_id, event_type, content, event_created_at,
                              webhook_url, delivery_status, attempt_count, cycle_attempt_count, replay_count,
-                             next_attempt_at, origin, created_at, updated_at)
+                             next_attempt_at, last_attempt_at, delivered_at, last_http_status, last_error,
+                             origin, created_at, updated_at)
                         VALUES
                             (:id, :eventId, :subscriptionId, :clientId, :eventType, :content, :eventCreatedAt,
                              :webhookUrl, :status, :attemptCount, :cycleAttemptCount, :replayCount,
-                             :nextAttemptAt, :origin, :createdAt, :updatedAt)
+                             :nextAttemptAt, :lastAttemptAt, :deliveredAt, :lastHttpStatus, :lastError,
+                             :origin, :createdAt, :updatedAt)
                         ON CONFLICT (event_id) DO NOTHING
                         """)
                 .param("id", notification.id())
@@ -62,11 +66,74 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                 .param("cycleAttemptCount", notification.cycleAttemptCount())
                 .param("replayCount", notification.replayCount())
                 .param("nextAttemptAt", toTimestamp(notification.nextAttemptAt()))
+                .param("lastAttemptAt", toTimestamp(notification.lastAttemptAt()))
+                .param("deliveredAt", toTimestamp(notification.deliveredAt()))
+                .param("lastHttpStatus", notification.lastHttpStatus())
+                .param("lastError", notification.lastError())
                 .param("origin", notification.origin().name())
                 .param("createdAt", toTimestamp(notification.createdAt()))
                 .param("updatedAt", toTimestamp(notification.updatedAt()))
                 .update();
         return inserted == 1;
+    }
+
+    @Override
+    public boolean saveAttemptIfAbsent(DeliveryAttempt attempt) {
+        int inserted = jdbcClient.sql("""
+                        INSERT INTO delivery_attempts
+                            (id, notification_event_id, attempt_number, attempt_trigger, webhook_url, status,
+                             http_status, error_code, error_message, started_at, completed_at, duration_ms)
+                        VALUES
+                            (:id, :notificationEventId, :attemptNumber, :trigger, :webhookUrl, :status,
+                             :httpStatus, :errorCode, :errorMessage, :startedAt, :completedAt, :durationMs)
+                        ON CONFLICT (notification_event_id, attempt_number) DO NOTHING
+                        """)
+                .param("id", attempt.id())
+                .param("notificationEventId", attempt.notificationEventId())
+                .param("attemptNumber", attempt.attemptNumber())
+                .param("trigger", attempt.trigger().name())
+                .param("webhookUrl", attempt.webhookUrl())
+                .param("status", attempt.status().name())
+                .param("httpStatus", attempt.httpStatus())
+                .param("errorCode", attempt.errorCode())
+                .param("errorMessage", attempt.errorMessage())
+                .param("startedAt", toTimestamp(attempt.startedAt()))
+                .param("completedAt", toTimestamp(attempt.completedAt()))
+                .param("durationMs", attempt.durationMs())
+                .update();
+        return inserted == 1;
+    }
+
+    @Override
+    public boolean requestReplay(ReplayCommand command) {
+        var spec = command.clientId() == null
+                ? jdbcClient.sql("""
+                        UPDATE notification_events
+                        SET delivery_status     = 'PENDING',
+                            cycle_attempt_count = 0,
+                            replay_count        = replay_count + 1,
+                            next_attempt_at     = :now,
+                            webhook_url         = :webhookUrl,
+                            updated_at          = :now
+                        WHERE id = :id
+                          AND delivery_status = 'FAILED'
+                        """)
+                : jdbcClient.sql("""
+                        UPDATE notification_events
+                        SET delivery_status     = 'PENDING',
+                            cycle_attempt_count = 0,
+                            replay_count        = replay_count + 1,
+                            next_attempt_at     = :now,
+                            webhook_url         = :webhookUrl,
+                            updated_at          = :now
+                        WHERE id = :id
+                          AND delivery_status = 'FAILED'
+                          AND client_id = :clientId
+                        """).param("clientId", command.clientId());
+        return spec.param("now", toTimestamp(command.now()))
+                .param("webhookUrl", command.webhookUrl())
+                .param("id", command.notificationEventId())
+                .update() == 1;
     }
 
     @Override

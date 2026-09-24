@@ -9,6 +9,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -18,6 +19,7 @@ import java.net.URI;
  */
 @Component
 @Profile("demo")
+@Order(1)
 @EnableConfigurationProperties(DemoProperties.class)
 class DemoSubscriptionSeeder implements ApplicationRunner {
 

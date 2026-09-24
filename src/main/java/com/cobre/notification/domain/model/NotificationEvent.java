@@ -52,6 +52,35 @@ public record NotificationEvent(
                 now);
     }
 
+    /**
+     * Starts a new delivery cycle. {@code attemptCount} stays monotonic; the next claim opens {@code cycleAttemptCount}
+     * from zero. The webhook snapshot is replaced with the subscription that is active now.
+     */
+    public NotificationEvent replay(String currentWebhookUrl, Instant now) {
+        status.requireTransitionTo(DeliveryStatus.PENDING);
+        return new NotificationEvent(
+                id,
+                eventId,
+                subscriptionId,
+                clientId,
+                eventType,
+                content,
+                eventCreatedAt,
+                currentWebhookUrl,
+                DeliveryStatus.PENDING,
+                attemptCount,
+                0,
+                replayCount + 1,
+                now,
+                lastAttemptAt,
+                deliveredAt,
+                lastHttpStatus,
+                lastError,
+                origin,
+                createdAt,
+                now);
+    }
+
     @Override
     public String toString() {
         return "NotificationEvent[id=%s, eventId=%s, clientId=%s, eventType=%s, status=%s, attemptCount=%d]"

@@ -14,6 +14,7 @@ public record DeliveryError(String code, String message) {
     public static final String HTTP_STATUS = "http_status";
     public static final String INVALID_DESTINATION = "invalid_destination";
     public static final String LEASE_EXPIRED = "lease_expired";
+    public static final String FIXTURE_SYNTHETIC = "fixture_synthetic";
 
     public DeliveryError {
         Objects.requireNonNull(code, "code");

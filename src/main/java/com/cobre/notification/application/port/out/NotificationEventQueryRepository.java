@@ -13,7 +13,10 @@ public interface NotificationEventQueryRepository {
 
     PageResult<NotificationEvent> findPage(NotificationEventQuery query);
 
-    Optional<NotificationEvent> findById(UUID id);
+    /**
+     * @param clientId {@code null} to skip the tenant predicate (operator, no filter).
+     */
+    Optional<NotificationEvent> findById(UUID id, String clientId);
 
     List<DeliveryAttempt> findAttempts(UUID notificationEventId);
 }

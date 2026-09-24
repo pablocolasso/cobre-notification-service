@@ -1,5 +1,6 @@
 package com.cobre.notification.config;
 
+import com.cobre.notification.application.port.out.AuditLog;
 import com.cobre.notification.application.port.out.DeliveryRepository;
 import com.cobre.notification.application.port.out.IdGenerator;
 import com.cobre.notification.application.port.out.NotificationEventQueryRepository;
@@ -11,6 +12,7 @@ import com.cobre.notification.application.service.DeliveryAttemptProcessor;
 import com.cobre.notification.application.service.IngestPlatformEventService;
 import com.cobre.notification.application.service.NotificationQueryService;
 import com.cobre.notification.application.service.RecoverExpiredLeasesService;
+import com.cobre.notification.application.service.ReplayNotificationEventService;
 import com.cobre.notification.domain.policy.DeliveryLifecycle;
 import com.cobre.notification.domain.policy.DeliveryResultClassifier;
 import com.cobre.notification.domain.policy.ExponentialBackoffRetryPolicy;
@@ -65,8 +67,17 @@ class ApplicationConfiguration {
     }
 
     @Bean
-    NotificationQueryService notificationQueryService(NotificationEventQueryRepository queries) {
-        return new NotificationQueryService(queries);
+    NotificationQueryService notificationQueryService(NotificationEventQueryRepository queries, AuditLog auditLog) {
+        return new NotificationQueryService(queries, auditLog);
+    }
+
+    @Bean
+    ReplayNotificationEventService replayNotificationEventService(NotificationEventQueryRepository queries,
+                                                                  NotificationEventRepository notifications,
+                                                                  SubscriptionRepository subscriptions,
+                                                                  AuditLog auditLog,
+                                                                  Clock clock) {
+        return new ReplayNotificationEventService(queries, notifications, subscriptions, auditLog, clock);
     }
 
     @Bean

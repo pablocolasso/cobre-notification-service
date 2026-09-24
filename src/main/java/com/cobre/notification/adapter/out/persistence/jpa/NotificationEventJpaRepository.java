@@ -1,13 +1,14 @@
 package com.cobre.notification.adapter.out.persistence.jpa;
 
 import com.cobre.notification.adapter.out.persistence.entity.NotificationEventEntity;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.Optional;
 import java.util.UUID;
 
-public interface NotificationEventJpaRepository extends JpaRepository<NotificationEventEntity, UUID> {
+public interface NotificationEventJpaRepository
+        extends JpaRepository<NotificationEventEntity, UUID>, JpaSpecificationExecutor<NotificationEventEntity> {
 
-    Page<NotificationEventEntity> findByClientId(String clientId, Pageable pageable);
+    Optional<NotificationEventEntity> findByIdAndClientId(UUID id, String clientId);
 }

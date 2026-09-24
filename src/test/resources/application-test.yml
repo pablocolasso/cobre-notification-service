@@ -12,3 +12,20 @@ app:
   delivery:
     worker:
       enabled: false
+  security:
+    api-keys:
+      - name: client-001
+        key: test-client-001
+        role: CLIENT
+        client-id: CLIENT001
+      - name: client-002
+        key: test-client-002
+        role: CLIENT
+        client-id: CLIENT002
+      - name: client-003
+        key: test-client-003
+        role: CLIENT
+        client-id: CLIENT003
+      - name: ops
+        key: test-ops
+        role: OPERATOR

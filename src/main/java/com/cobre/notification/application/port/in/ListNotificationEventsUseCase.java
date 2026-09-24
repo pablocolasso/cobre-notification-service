@@ -7,5 +7,5 @@ public interface ListNotificationEventsUseCase {
     /**
      * Ordered by event creation date descending, then id descending, so pages are stable.
      */
-    PageResult<NotificationEvent> list(NotificationEventQuery query);
+    PageResult<NotificationEvent> list(Requester requester, NotificationEventQuery query, String correlationId);
 }
