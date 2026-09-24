@@ -244,3 +244,113 @@ Four commits (`ab136fe`, `60a8eee`, `b15235e`, `2d51099`) on top of `chore: phas
 docker compose: 12 published events -> 10 notifications (duplicate deduplicated, unsubscribed type ignored),
 9 COMPLETED and 1 FAILED with `last_error = "http_status: HTTP 500"`; webhook received the expected headers and
 snake_case body; `content` absent from application logs.
+
+---
+
+## Entry 5 - Pre-Phase 3 review: clock source, invalid messages, worker concurrency
+
+**Date:** 2026-09-24
+**Type:** code review (no code changes)
+
+### Goal
+
+Speed up the human review before Phase 3 by answering three questions with concrete file and test references,
+and by listing anything that should be fixed, without changing code.
+
+### Prompt (summary)
+
+"Before Phase 3 I will review Phases 1 and 2. Do not advance. (1) Clock: show where the app `Clock` and DB `now()`
+are used; confirm the claim and `locked_until` use the same source in every path; flag any mix; if the decision
+stands, write the NTP assumption and the risk in ADR-003. (2) Invalid messages: confirm no path discards a message
+without the DLT or a count; point to the test. (3) Worker concurrency: point to the test running 2+ workers on the
+same rows; if it only tests the query, say what is missing. Reference files and tests; list fixes and wait."
+
+### Relevant AI output
+
+**Premise correction.** Phase 2 is not implemented. The last commit is `df2734b` (Phase 1 ai-log). There is no
+DLT, no lease recovery, no retries, no concurrent-claim test and no ADR folder. The answers below describe the
+Phase 1 code as it is.
+
+**1. Clock.**
+- The app `Clock` is the only source in application paths:
+  - `IngestPlatformEventService` line 37, through `NotificationEvent.pendingFrom`: `next_attempt_at`,
+    `created_at`, `updated_at`.
+  - `DeliverNotificationService` lines 54-55: a single `now` gives both the claim cutoff and
+    `lockedUntil = now + leaseDuration`.
+  - `DeliverNotificationService` line 65: a second reading for `completed_at` / `delivered_at` / `updated_at`.
+  - `SubscriptionPersistenceAdapter` line 36.
+- In `NotificationEventPersistenceAdapter.claimDue`, `next_attempt_at <= :now`, `locked_until = :lockedUntil`,
+  `last_attempt_at` / `updated_at = :now` and the attempt `started_at` all use the parameters derived from that
+  single `now`. `recordResult` uses `completion.completedAt()`.
+- DB `now()` appears only as `DEFAULT now()` in `V1__init.sql` (lines 8-9 and 39-40). It is never reached by
+  application inserts, because they pass explicit values. It is reached by raw SQL inserts in tests
+  (`NotificationEventControllerTest`).
+- No path mixes DB and app time. The only cross-source comparison is across nodes: `next_attempt_at` is
+  written by the ingesting node and compared by the worker node.
+- `locked_until` is written but no code reads it yet. The fence in `recordResult` checks only `locked_by` +
+  `PROCESSING`.
+- The assumption and the risks are written in `docs/adr/ADR-003-durable-postgresql-delivery.md`
+  (status Proposed), with the DB-clock alternative.
+
+**2. Invalid messages: the statement does not hold.**
+- `KafkaConfiguration.kafkaErrorHandler` builds a `DefaultErrorHandler` without a recoverer. Invalid messages
+  (`InvalidPlatformEventException`) are logged by Spring Kafka's default recoverer (`topic-partition@offset`
+  only) and skipped. There is no DLT and no counter.
+- `IngestionIntegrationTest.invalidMessageDoesNotBlockThePartition` only proves the next message is processed.
+  It does not assert any DLT record or count.
+- `NO_SUBSCRIPTION` events are acked by design. Their only trace is the `outcome` key-value in
+  `PlatformEventKafkaListener`, which the default console pattern does not render.
+- Two inputs escape the non-retryable classification and would stall the partition forever (infinite backoff)
+  instead of being dead-lettered. Both come from code analysis and were not executed:
+  - the JSON literal `null`: `readValue` returns `null`, then `message.schemaVersion()` throws a
+    `NullPointerException` at `PlatformEventMessageMapper` line 34;
+  - `content` containing `\u0000`: PostgreSQL / pgjdbc rejects NUL in text, so the insert fails with a
+    retryable data access exception.
+
+**3. Worker concurrency: there is no such test.**
+- The closest test is `NotificationEventPersistenceAdapterTest.claimSkipsRowsNotYetDueAndRowsAlreadyClaimed`.
+  It runs two claims sequentially on one thread, so the second one sees `PROCESSING` rows after the first
+  transaction has committed. It would pass even without `SKIP LOCKED`.
+- `resultFromWorkerWithoutLeaseIsRejected` covers the fence, not concurrency.
+- Missing:
+  - (a) a query-level test with two or more threads whose claim transactions truly overlap (barrier or latch),
+    rows exceeding the batch size, and assertions that the union of claimed ids equals all rows, the
+    intersection is empty and each row has exactly one attempt;
+  - (b) a lock-held test: open a transaction that locks some due rows, then check that a concurrent claim skips
+    them without blocking (this proves `SKIP LOCKED` itself);
+  - (c) a service-level test with two `DeliverNotificationService` instances (distinct worker ids) against
+    `RecordingWebhookServer`, asserting each notification was received exactly once and `attempt_count = 1`.
+  - The Hikari pool must allow the number of threads used.
+
+**Findings proposed for correction (not applied; awaiting confirmation):**
+- F1. Wire the DLT: `DeadLetterPublishingRecoverer` for non-retryable errors, plus a counter. A test asserts
+  the record in `platform.events.v1.DLT` (planned for Phase 2).
+- F2. Treat a `null` JSON literal as `empty_message` / `malformed_json`, and reject or strip `\u0000` in
+  `content` as an invalid event. Add mapper tests for both.
+- F3. Decide the policy for unexpected (non-transient) exceptions in the listener: today every exception is
+  retried forever.
+- F4. Add the concurrency tests (a), (b) and (c).
+- F5. Lease recovery does not exist yet. A crashed worker, or a failed `recordResult`, leaves the row in
+  `PROCESSING` forever. The error log in `DeliverNotificationService` ("the lease will expire and the attempt
+  will be recovered") is not true in Phase 1.
+- F6. For Phase 2, the fence should also match the attempt (for example `attempt_count = :attemptNumber` or an
+  attempt/lease token), not only `locked_by`. Otherwise a row that is recovered and reclaimed by the same worker
+  id could accept a stale result.
+- F7. Make key-values visible in logs (structured or logfmt pattern). Otherwise outcomes such as
+  `no_subscription` are invisible.
+- F8. Optional: compute `duration_ms` with a monotonic source (`System.nanoTime`) instead of two wall-clock
+  readings.
+
+### Human analysis
+
+Pending review
+
+### Decision
+
+Pending review
+
+### Resulting change
+
+- No code changed.
+- New `docs/adr/ADR-003-durable-postgresql-delivery.md` with the time-source decision, NTP assumption, risks
+  and the DB-clock alternative (other sections pending Phase 2).
