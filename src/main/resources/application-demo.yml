@@ -1,8 +1,13 @@
 app:
+  delivery:
+    # Short enough to watch RETRYING -> COMPLETED/FAILED live; worst case 2+4+8+16 s for 5 attempts.
+    retry:
+      base-delay: 2s
+      max-delay: 30s
   demo:
     webhook-url: ${WEBHOOK_URL:http://localhost:8089/webhook/ok}
-    # The (client_id, event_type) pairs of notification_events.json. One pair points at a failing
-    # endpoint so the demo shows both terminal states.
+    # The (client_id, event_type) pairs of notification_events.json. One pair points at a flaky endpoint
+    # (500, 500, then 200) and one at a failing endpoint so the demo shows retries and both terminal states.
     subscriptions:
       - client-id: CLIENT001
         event-type: credit_card_payment
@@ -18,6 +23,7 @@ app:
         event-type: debit_automatic_payment
       - client-id: CLIENT002
         event-type: debit_purchase
+        webhook-url: ${WEBHOOK_FLAKY_URL:http://localhost:8089/webhook/flaky}
       - client-id: CLIENT003
         event-type: credit_refund
       - client-id: CLIENT003

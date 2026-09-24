@@ -86,6 +86,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/notifications
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-mock:8080/webhook/ok}
+      WEBHOOK_FLAKY_URL: ${WEBHOOK_FLAKY_URL:-http://webhook-mock:8080/webhook/flaky}
       WEBHOOK_FAILING_URL: ${WEBHOOK_FAILING_URL:-http://webhook-mock:8080/webhook/error}
     ports:
       - "8080:8080"
