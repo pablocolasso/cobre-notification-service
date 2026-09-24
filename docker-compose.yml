@@ -72,5 +72,24 @@ services:
       timeout: 5s
       retries: 20
 
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      webhook-mock:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: local,demo
+      DB_URL: jdbc:postgresql://postgres:5432/notifications
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-mock:8080/webhook/ok}
+      WEBHOOK_FAILING_URL: ${WEBHOOK_FAILING_URL:-http://webhook-mock:8080/webhook/error}
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+
 volumes:
   postgres-data:

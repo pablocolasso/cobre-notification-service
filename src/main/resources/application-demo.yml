@@ -1,3 +1,27 @@
 app:
   demo:
     webhook-url: ${WEBHOOK_URL:http://localhost:8089/webhook/ok}
+    # The (client_id, event_type) pairs of notification_events.json. One pair points at a failing
+    # endpoint so the demo shows both terminal states.
+    subscriptions:
+      - client-id: CLIENT001
+        event-type: credit_card_payment
+      - client-id: CLIENT001
+        event-type: debit_card_withdrawal
+      - client-id: CLIENT001
+        event-type: credit_deposit
+      - client-id: CLIENT001
+        event-type: debit_subscription
+      - client-id: CLIENT002
+        event-type: credit_transfer
+      - client-id: CLIENT002
+        event-type: debit_automatic_payment
+      - client-id: CLIENT002
+        event-type: debit_purchase
+      - client-id: CLIENT003
+        event-type: credit_refund
+      - client-id: CLIENT003
+        event-type: debit_transfer
+      - client-id: CLIENT003
+        event-type: credit_cashback
+        webhook-url: ${WEBHOOK_FAILING_URL:http://localhost:8089/webhook/error}
