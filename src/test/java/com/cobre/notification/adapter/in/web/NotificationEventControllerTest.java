@@ -127,6 +127,9 @@ class NotificationEventControllerTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/notification_events").header("X-API-Key", OPS))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total_elements").value(6));
+        mockMvc.perform(get("/notification_events").header("X-API-Key", OPS).param("client_id", ""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_elements").value(6));
     }
 
     @Test

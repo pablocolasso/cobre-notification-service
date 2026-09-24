@@ -564,13 +564,21 @@ The implementation was written as one pass and split into commits at the end.
 
 ### Human analysis
 
-Pending review
+Reviewed. No critical bug.
+
+- `correlation_id` is generated and passed through the request, but it is not yet in MDC / structured
+  logging. That belongs to Phase 5; leave it as documented.
+- Empty `client_id` (`""`) was treated as a literal tenant filter, so an Operator would get an empty
+  page instead of the cross-tenant list. Undefined edge case, not a main-path bug.
 
 ### Decision
 
-Pending review
+- Accept Phase 3.
+- Keep `correlation_id` out of MDC until Phase 5.
+- Treat a blank Operator `client_id` as “no filter” (same as omitting the parameter).
+- Do not start Phase 4 until it is explicitly requested.
 
 ### Resulting change
 
 Commits `9189e57`, `804dc0d`, `e0c51b5`, `9c02880` on `develop` (no push). ADR-006 and ADR-007 Proposed.
-`docs/assumptions.md` records A13.
+`docs/assumptions.md` records A13. Blank `client_id` for Operator is normalized to no filter.

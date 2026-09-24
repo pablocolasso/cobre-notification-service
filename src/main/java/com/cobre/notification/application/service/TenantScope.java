@@ -20,7 +20,7 @@ final class TenantScope {
     static String effectiveClientId(Requester requester, String requestedClientId) {
         return switch (requester) {
             case Client client -> client.clientId();
-            case Operator ignored -> requestedClientId;
+            case Operator ignored -> blankToNull(requestedClientId);
         };
     }
 
@@ -30,8 +30,15 @@ final class TenantScope {
     static String auditClientId(Requester requester, String requestedClientId) {
         return switch (requester) {
             case Client client -> client.clientId();
-            case Operator ignored -> requestedClientId == null || requestedClientId.isBlank() ? "*" : requestedClientId;
+            case Operator ignored -> {
+                String tenant = blankToNull(requestedClientId);
+                yield tenant == null ? "*" : tenant;
+            }
         };
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     static Optional<NotificationEvent> findVisible(NotificationEventQueryRepository queries, Requester requester,
