@@ -1,11 +1,13 @@
 package com.cobre.notification.config;
 
 import com.cobre.notification.application.port.out.DeliveryRepository;
+import com.cobre.notification.application.port.out.NotificationEventQueryRepository;
 import com.cobre.notification.application.port.out.NotificationEventRepository;
 import com.cobre.notification.application.port.out.SubscriptionRepository;
 import com.cobre.notification.application.port.out.WebhookClient;
 import com.cobre.notification.application.service.DeliverNotificationService;
 import com.cobre.notification.application.service.IngestPlatformEventService;
+import com.cobre.notification.application.service.NotificationQueryService;
 import com.cobre.notification.domain.policy.DeliveryResultClassifier;
 import com.cobre.notification.domain.policy.SuccessOnlyDeliveryResultClassifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +39,11 @@ class ApplicationConfiguration {
                                                           NotificationEventRepository notifications,
                                                           Clock clock) {
         return new IngestPlatformEventService(subscriptions, notifications, clock);
+    }
+
+    @Bean
+    NotificationQueryService notificationQueryService(NotificationEventQueryRepository queries) {
+        return new NotificationQueryService(queries);
     }
 
     @Bean

@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Duration;
 import java.util.Map;
@@ -17,6 +18,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Walking skeleton: platform event on Kafka -> subscription check -> PostgreSQL -> worker -> webhook.
@@ -35,6 +39,9 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
     @Autowired
     SubscriptionRepository subscriptions;
 
+    @Autowired
+    MockMvc mockMvc;
+
     @Value("${app.kafka.topics.platform-events}")
     String topic;
 
@@ -49,7 +56,7 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void subscribedEventIsDeliveredAndCompleted() {
+    void subscribedEventIsDeliveredAndCompleted() throws Exception {
         subscriptions.upsertActive("CLIENT001", "credit_card_payment", webhookServer.url("/ok"));
         String eventId = "EVT-" + UUID.randomUUID();
 
@@ -76,6 +83,15 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
                     assertThat(attempt.get("http_status")).isEqualTo(200);
                     assertThat(attempt.get("attempt_trigger")).isEqualTo("INITIAL");
                 });
+
+        mockMvc.perform(get("/notification_events/{id}", notification.get("id")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.event_id").value(eventId))
+                .andExpect(jsonPath("$.delivery_status").value("completed"))
+                .andExpect(jsonPath("$.delivery_attempts[0].status").value("success"));
+        mockMvc.perform(get("/notification_events").param("client_id", "CLIENT001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.event_id == '%s')].delivery_status", eventId).value("completed"));
     }
 
     @Test
