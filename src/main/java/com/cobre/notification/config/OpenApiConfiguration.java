@@ -17,7 +17,8 @@ class OpenApiConfiguration {
                 .info(new Info()
                         .title("Cobre Notification Events API")
                         .version("1.0")
-                        .description("Self-service API for notification events. Authenticate with the X-API-Key header."))
+                        .description("Self-service API for notification events. Authenticate with the X-API-Key header. "
+                                + "Examples and the outbound webhook contract: docs/api.md."))
                 .components(new Components().addSecuritySchemes("apiKey", new SecurityScheme()
                         .type(SecurityScheme.Type.APIKEY)
                         .in(SecurityScheme.In.HEADER)

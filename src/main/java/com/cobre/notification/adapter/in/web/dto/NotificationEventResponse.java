@@ -1,6 +1,7 @@
 package com.cobre.notification.adapter.in.web.dto;
 
 import com.cobre.notification.domain.model.NotificationEvent;
+import io.swagger.v3.oas.annotations.media.Schema;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
@@ -10,11 +11,11 @@ import java.util.UUID;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record NotificationEventResponse(
         UUID notificationEventId,
-        String eventId,
-        String clientId,
-        String eventType,
+        @Schema(example = "EVT101") String eventId,
+        @Schema(example = "CLIENT001") String clientId,
+        @Schema(example = "credit_card_payment") String eventType,
         String content,
-        String deliveryStatus,
+        @Schema(example = "completed") String deliveryStatus,
         Instant eventCreatedAt,
         Instant lastAttemptAt,
         Instant deliveredAt,

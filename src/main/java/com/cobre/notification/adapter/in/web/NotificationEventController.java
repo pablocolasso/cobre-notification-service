@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -58,7 +59,13 @@ class NotificationEventController {
     @GetMapping
     @Operation(summary = "List notification events",
             description = "For a client key the tenant is always the key's client_id; a client_id query parameter is ignored.")
-    @ApiResponse(responseCode = "200", description = "Page of notification events")
+    @ApiResponse(responseCode = "200", description = "Page of notification events",
+            content = @Content(examples = @ExampleObject(name = "page", value = """
+                    {"items":[{"notification_event_id":"00000000-0000-0000-0000-000000000001",
+                    "event_id":"EVT101","client_id":"CLIENT001","event_type":"credit_card_payment",
+                    "content":"Credit card payment received for $150.00","delivery_status":"completed",
+                    "event_created_at":"2026-09-23T09:30:22Z","attempt_count":1}],
+                    "page":0,"size":20,"total_elements":1,"total_pages":1}""")))
     @ApiResponse(responseCode = "400", description = "Invalid query", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "401", description = "Missing or invalid API key", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     PageResponse<NotificationEventResponse> list(
@@ -82,7 +89,14 @@ class NotificationEventController {
 
     @GetMapping("/{notification_event_id}")
     @Operation(summary = "Get a notification event and its attempts")
-    @ApiResponse(responseCode = "200", description = "Notification event")
+    @ApiResponse(responseCode = "200", description = "Notification event",
+            content = @Content(examples = @ExampleObject(name = "detail", value = """
+                    {"notification_event_id":"00000000-0000-0000-0000-000000000001",
+                    "event_id":"EVT101","client_id":"CLIENT001","event_type":"credit_card_payment",
+                    "content":"Credit card payment received for $150.00","delivery_status":"completed",
+                    "webhook_url":"http://webhook-mock","replay_count":0,"last_error":null,
+                    "delivery_attempts":[{"attempt_number":1,"trigger":"initial","status":"success",
+                    "http_status":200,"error_code":null,"duration_ms":40}]}""")))
     @ApiResponse(responseCode = "401", description = "Missing or invalid API key", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "404", description = "Unknown or not visible", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     NotificationEventDetailsResponse get(
@@ -96,7 +110,11 @@ class NotificationEventController {
     @PostMapping("/{notification_event_id}/replay")
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(summary = "Replay a failed notification")
-    @ApiResponse(responseCode = "202", description = "Queued for a new delivery cycle")
+    @ApiResponse(responseCode = "202", description = "Queued for a new delivery cycle",
+            content = @Content(examples = @ExampleObject(name = "replayed", value = """
+                    {"notification_event_id":"00000000-0000-0000-0000-000000000109",
+                    "event_id":"EVT109","client_id":"CLIENT003","delivery_status":"pending",
+                    "replay_count":1,"last_error":null,"delivery_attempts":[]}""")))
     @ApiResponse(responseCode = "401", description = "Missing or invalid API key", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "404", description = "Unknown or not visible", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "409", description = "Not failed, or no active subscription",
