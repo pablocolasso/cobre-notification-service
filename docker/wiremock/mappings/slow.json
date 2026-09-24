@@ -1,0 +1,10 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/webhook/slow"
+  },
+  "response": {
+    "status": 200,
+    "fixedDelayMilliseconds": 10000
+  }
+}

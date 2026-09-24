@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/webhook/rate-limited"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "Retry-After": "2"
+    }
+  }
+}

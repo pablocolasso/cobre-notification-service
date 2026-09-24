@@ -1,0 +1,3 @@
+app:
+  demo:
+    webhook-url: ${WEBHOOK_URL:http://localhost:8089/webhook/ok}

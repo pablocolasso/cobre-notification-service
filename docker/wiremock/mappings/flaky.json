@@ -1,0 +1,45 @@
+{
+  "mappings": [
+    {
+      "scenarioName": "flaky-webhook",
+      "requiredScenarioState": "Started",
+      "newScenarioState": "first-failure",
+      "request": {
+        "method": "POST",
+        "urlPath": "/webhook/flaky"
+      },
+      "response": {
+        "status": 500
+      }
+    },
+    {
+      "scenarioName": "flaky-webhook",
+      "requiredScenarioState": "first-failure",
+      "newScenarioState": "recovered",
+      "request": {
+        "method": "POST",
+        "urlPath": "/webhook/flaky"
+      },
+      "response": {
+        "status": 500
+      }
+    },
+    {
+      "scenarioName": "flaky-webhook",
+      "requiredScenarioState": "recovered",
+      "request": {
+        "method": "POST",
+        "urlPath": "/webhook/flaky"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "status": "received"
+        }
+      }
+    }
+  ]
+}

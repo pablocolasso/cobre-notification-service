@@ -1,0 +1,9 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/webhook/gone"
+  },
+  "response": {
+    "status": 404
+  }
+}

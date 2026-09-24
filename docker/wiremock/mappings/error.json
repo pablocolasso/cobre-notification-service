@@ -1,0 +1,9 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/webhook/error"
+  },
+  "response": {
+    "status": 500
+  }
+}
