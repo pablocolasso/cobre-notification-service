@@ -57,7 +57,7 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
 
     @Test
     void subscribedEventIsDeliveredAndCompleted() throws Exception {
-        subscriptions.upsertActive("CLIENT001", "credit_card_payment", webhookServer.url("/ok"));
+        subscriptions.upsertActive(UUID.randomUUID(), "CLIENT001", "credit_card_payment", webhookServer.url("/ok"));
         String eventId = "EVT-" + UUID.randomUUID();
 
         publish(eventId, "CLIENT001", "credit_card_payment");
@@ -96,7 +96,7 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
 
     @Test
     void failingWebhookMarksNotificationFailed() {
-        subscriptions.upsertActive("CLIENT002", "credit_transfer", webhookServer.url("/error"));
+        subscriptions.upsertActive(UUID.randomUUID(), "CLIENT002", "credit_transfer", webhookServer.url("/error"));
         String eventId = "EVT-" + UUID.randomUUID();
 
         publish(eventId, "CLIENT002", "credit_transfer");

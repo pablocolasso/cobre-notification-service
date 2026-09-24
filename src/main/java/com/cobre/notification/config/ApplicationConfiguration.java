@@ -1,6 +1,7 @@
 package com.cobre.notification.config;
 
 import com.cobre.notification.application.port.out.DeliveryRepository;
+import com.cobre.notification.application.port.out.IdGenerator;
 import com.cobre.notification.application.port.out.NotificationEventQueryRepository;
 import com.cobre.notification.application.port.out.NotificationEventRepository;
 import com.cobre.notification.application.port.out.SubscriptionRepository;
@@ -35,10 +36,16 @@ class ApplicationConfiguration {
     }
 
     @Bean
+    IdGenerator idGenerator() {
+        return UUID::randomUUID;
+    }
+
+    @Bean
     IngestPlatformEventService ingestPlatformEventService(SubscriptionRepository subscriptions,
                                                           NotificationEventRepository notifications,
+                                                          IdGenerator ids,
                                                           Clock clock) {
-        return new IngestPlatformEventService(subscriptions, notifications, clock);
+        return new IngestPlatformEventService(subscriptions, notifications, ids, clock);
     }
 
     @Bean

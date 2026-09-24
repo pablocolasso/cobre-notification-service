@@ -64,7 +64,7 @@ class KafkaErrorHandlingIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        subscriptions.upsertActive(CLIENT_ID, EVENT_TYPE, "https://client.example/hook");
+        subscriptions.upsertActive(UUID.randomUUID(), CLIENT_ID, EVENT_TYPE, "https://client.example/hook");
         partitionKey = "key-" + UUID.randomUUID();
         deadLetterConsumer = consumerFactory.createConsumer("dlt-reader-" + UUID.randomUUID(), null);
         deadLetterConsumer.subscribe(List.of(deadLetterTopic));

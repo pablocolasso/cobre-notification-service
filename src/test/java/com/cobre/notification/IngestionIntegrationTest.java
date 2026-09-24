@@ -31,7 +31,7 @@ class IngestionIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void subscribe() {
-        subscriptions.upsertActive(CLIENT_ID, EVENT_TYPE, WEBHOOK_URL);
+        subscriptions.upsertActive(UUID.randomUUID(), CLIENT_ID, EVENT_TYPE, WEBHOOK_URL);
     }
 
     @Test

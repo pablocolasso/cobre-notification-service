@@ -32,7 +32,7 @@ class SubscriptionPersistenceAdapter implements SubscriptionRepository {
     }
 
     @Override
-    public void upsertActive(String clientId, String eventType, String webhookUrl) {
+    public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl) {
         Instant now = clock.instant();
         jdbcClient.sql("""
                         INSERT INTO subscriptions (id, client_id, event_type, webhook_url, active, created_at, updated_at)
@@ -40,7 +40,7 @@ class SubscriptionPersistenceAdapter implements SubscriptionRepository {
                         ON CONFLICT (client_id, event_type) WHERE active
                         DO UPDATE SET webhook_url = EXCLUDED.webhook_url, updated_at = EXCLUDED.updated_at
                         """)
-                .param("id", UUID.randomUUID())
+                .param("id", id)
                 .param("clientId", clientId)
                 .param("eventType", eventType)
                 .param("webhookUrl", webhookUrl)

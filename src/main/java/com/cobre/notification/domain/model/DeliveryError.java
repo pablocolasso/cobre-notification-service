@@ -11,6 +11,10 @@ public record DeliveryError(String code, String message) {
     public static final int MAX_MESSAGE_LENGTH = 500;
     public static final int MAX_CODE_LENGTH = 50;
 
+    public static final String HTTP_STATUS = "http_status";
+    public static final String INVALID_DESTINATION = "invalid_destination";
+    public static final String LEASE_EXPIRED = "lease_expired";
+
     public DeliveryError {
         Objects.requireNonNull(code, "code");
         code = truncate(stripControlCharacters(code), MAX_CODE_LENGTH);
@@ -18,7 +22,19 @@ public record DeliveryError(String code, String message) {
     }
 
     public static DeliveryError httpStatus(int statusCode) {
-        return new DeliveryError("http_status", "HTTP " + statusCode);
+        return new DeliveryError(HTTP_STATUS, "HTTP " + statusCode);
+    }
+
+    public static DeliveryError leaseExpired() {
+        return new DeliveryError(LEASE_EXPIRED, "Worker lease expired before the result was recorded");
+    }
+
+    /**
+     * Same code, with the reason the notification stopped being retried.
+     */
+    public DeliveryError retriesExhausted(int attempts) {
+        String exhausted = "retries exhausted after " + attempts + " attempts";
+        return new DeliveryError(code, message == null ? exhausted : message + "; " + exhausted);
     }
 
     public String summary() {

@@ -28,8 +28,10 @@ class IngestPlatformEventServiceTest {
 
     private final InMemorySubscriptions subscriptions = new InMemorySubscriptions();
     private final InMemoryNotifications notifications = new InMemoryNotifications();
-    private final IngestPlatformEventService service =
-            new IngestPlatformEventService(subscriptions, notifications, Clock.fixed(NOW, ZoneOffset.UTC));
+    private static final UUID GENERATED_ID = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+
+    private final IngestPlatformEventService service = new IngestPlatformEventService(
+            subscriptions, notifications, () -> GENERATED_ID, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
     void createsPendingNotificationWithWebhookSnapshotWhenSubscriptionIsActive() {
@@ -39,6 +41,7 @@ class IngestPlatformEventServiceTest {
 
         assertThat(result).isEqualTo(IngestionResult.ACCEPTED);
         assertThat(notifications.saved).singleElement().satisfies(notification -> {
+            assertThat(notification.id()).isEqualTo(GENERATED_ID);
             assertThat(notification.status()).isEqualTo(DeliveryStatus.PENDING);
             assertThat(notification.nextAttemptAt()).isEqualTo(NOW);
             assertThat(notification.webhookUrl()).isEqualTo("https://client.example/hook");
@@ -101,7 +104,7 @@ class IngestPlatformEventServiceTest {
         }
 
         @Override
-        public void upsertActive(String clientId, String eventType, String webhookUrl) {
+        public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl) {
             add(clientId, eventType, webhookUrl);
         }
     }

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,7 +23,7 @@ class DemoSubscriptionSeederTest {
                 new DemoSubscription("CLIENT001", "credit_card_payment", null),
                 new DemoSubscription("CLIENT003", "credit_cashback", "https://failing.example/hook")));
 
-        new DemoSubscriptionSeeder(properties, subscriptions).run(null);
+        new DemoSubscriptionSeeder(properties, subscriptions, UUID::randomUUID).run(null);
 
         assertThat(subscriptions.upserts).containsExactly(
                 "CLIENT001|credit_card_payment|https://default.example/hook",
@@ -33,7 +34,7 @@ class DemoSubscriptionSeederTest {
     void failsFastWhenNoUrlIsConfigured() {
         var properties = new DemoProperties(" ", List.of(new DemoSubscription("CLIENT001", "credit_card_payment", null)));
 
-        assertThatThrownBy(() -> new DemoSubscriptionSeeder(properties, subscriptions).run(null))
+        assertThatThrownBy(() -> new DemoSubscriptionSeeder(properties, subscriptions, UUID::randomUUID).run(null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CLIENT001/credit_card_payment");
         assertThat(subscriptions.upserts).isEmpty();
@@ -49,7 +50,7 @@ class DemoSubscriptionSeederTest {
         }
 
         @Override
-        public void upsertActive(String clientId, String eventType, String webhookUrl) {
+        public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl) {
             upserts.add(clientId + "|" + eventType + "|" + webhookUrl);
         }
     }

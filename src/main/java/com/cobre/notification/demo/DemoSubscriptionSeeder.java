@@ -1,5 +1,6 @@
 package com.cobre.notification.demo;
 
+import com.cobre.notification.application.port.out.IdGenerator;
 import com.cobre.notification.application.port.out.SubscriptionRepository;
 import com.cobre.notification.demo.DemoProperties.DemoSubscription;
 import org.slf4j.Logger;
@@ -24,10 +25,12 @@ class DemoSubscriptionSeeder implements ApplicationRunner {
 
     private final DemoProperties properties;
     private final SubscriptionRepository subscriptions;
+    private final IdGenerator ids;
 
-    DemoSubscriptionSeeder(DemoProperties properties, SubscriptionRepository subscriptions) {
+    DemoSubscriptionSeeder(DemoProperties properties, SubscriptionRepository subscriptions, IdGenerator ids) {
         this.properties = properties;
         this.subscriptions = subscriptions;
+        this.ids = ids;
     }
 
     @Override
@@ -38,7 +41,7 @@ class DemoSubscriptionSeeder implements ApplicationRunner {
                 throw new IllegalStateException("No webhook URL for demo subscription "
                         + subscription.clientId() + "/" + subscription.eventType());
             }
-            subscriptions.upsertActive(subscription.clientId(), subscription.eventType(), webhookUrl);
+            subscriptions.upsertActive(ids.newId(), subscription.clientId(), subscription.eventType(), webhookUrl);
             log.atInfo()
                     .setMessage("Demo subscription upserted")
                     .addKeyValue("client_id", subscription.clientId())
