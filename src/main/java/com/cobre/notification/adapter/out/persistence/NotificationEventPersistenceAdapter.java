@@ -1,9 +1,14 @@
 package com.cobre.notification.adapter.out.persistence;
 
+import com.cobre.notification.application.port.out.ClaimRequest;
 import com.cobre.notification.application.port.out.DeliveryCompletion;
 import com.cobre.notification.application.port.out.DeliveryRepository;
+import com.cobre.notification.application.port.out.ExpiredLease;
+import com.cobre.notification.application.port.out.LeaseRecovery;
 import com.cobre.notification.application.port.out.NotificationEventRepository;
 import com.cobre.notification.domain.model.AttemptTrigger;
+import com.cobre.notification.domain.model.DeliveryDecision;
+import com.cobre.notification.domain.model.DeliveryError;
 import com.cobre.notification.domain.model.DeliveryTask;
 import com.cobre.notification.domain.model.NotificationEvent;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -13,6 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -64,9 +70,13 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
     }
 
     @Override
-    public List<DeliveryTask> claimDue(String workerId, int batchSize, Instant now, Instant lockedUntil) {
+    public List<DeliveryTask> claimDue(ClaimRequest request) {
+        if (request.limit() == 0) {
+            return List.of();
+        }
+        Instant now = request.now();
         return transactionTemplate.execute(status -> {
-            List<DeliveryTask> tasks = jdbcClient.sql("""
+            List<ClaimedRow> rows = jdbcClient.sql("""
                             UPDATE notification_events n
                             SET delivery_status     = 'PROCESSING',
                                 locked_by           = :workerId,
@@ -81,25 +91,31 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                                            WHERE delivery_status IN ('PENDING', 'RETRYING')
                                              AND next_attempt_at <= :now
                                            ORDER BY next_attempt_at, id
-                                           LIMIT :batchSize
+                                           LIMIT :limit
                                            FOR UPDATE SKIP LOCKED)
                             RETURNING n.id, n.event_id, n.client_id, n.event_type, n.content, n.event_created_at,
                                       n.webhook_url, n.attempt_count, n.cycle_attempt_count, n.replay_count
                             """)
-                    .param("workerId", workerId)
-                    .param("lockedUntil", toTimestamp(lockedUntil))
+                    .param("workerId", request.workerId())
+                    .param("lockedUntil", toTimestamp(request.lockedUntil()))
                     .param("now", toTimestamp(now))
-                    .param("batchSize", batchSize)
-                    .query((rs, rowNum) -> toTask(rs, now))
+                    .param("limit", request.limit())
+                    .query(NotificationEventPersistenceAdapter::toClaimedRow)
                     .list();
 
-            tasks.forEach(task -> insertInProgressAttempt(task, now));
+            List<DeliveryTask> tasks = new ArrayList<>(rows.size());
+            for (int i = 0; i < rows.size(); i++) {
+                DeliveryTask task = rows.get(i).toTask(request.attemptIds().get(i), now);
+                insertInProgressAttempt(task, now);
+                tasks.add(task);
+            }
             return tasks;
         });
     }
 
     @Override
     public boolean recordResult(DeliveryCompletion completion) {
+        DeliveryDecision decision = completion.decision();
         Boolean recorded = transactionTemplate.execute(status -> {
             int updated = jdbcClient.sql("""
                             UPDATE notification_events
@@ -112,17 +128,19 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                                 locked_until     = NULL,
                                 updated_at       = :now
                             WHERE id = :id
-                              AND locked_by = :workerId
                               AND delivery_status = 'PROCESSING'
+                              AND locked_by = :workerId
+                              AND attempt_count = :attemptNumber
                             """)
-                    .param("status", completion.notificationStatus().name())
-                    .param("deliveredAt", toTimestamp(completion.deliveredAt()))
-                    .param("nextAttemptAt", toTimestamp(completion.nextAttemptAt()))
+                    .param("status", decision.status().name())
+                    .param("deliveredAt", toTimestamp(decision.deliveredAt()))
+                    .param("nextAttemptAt", toTimestamp(decision.nextAttemptAt()))
                     .param("httpStatus", completion.httpStatus())
-                    .param("lastError", completion.error() == null ? null : completion.error().summary())
+                    .param("lastError", summaryOf(decision.lastError()))
                     .param("now", toTimestamp(completion.completedAt()))
                     .param("id", completion.notificationEventId())
                     .param("workerId", completion.workerId())
+                    .param("attemptNumber", completion.attemptNumber())
                     .update();
             if (updated == 0) {
                 return false;
@@ -139,10 +157,10 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                             WHERE id = :attemptId
                               AND status = 'IN_PROGRESS'
                             """)
-                    .param("status", completion.attemptStatus().name())
+                    .param("status", decision.attemptStatus().name())
                     .param("httpStatus", completion.httpStatus())
-                    .param("errorCode", completion.error() == null ? null : completion.error().code())
-                    .param("errorMessage", completion.error() == null ? null : completion.error().message())
+                    .param("errorCode", codeOf(decision.attemptError()))
+                    .param("errorMessage", messageOf(decision.attemptError()))
                     .param("completedAt", toTimestamp(completion.completedAt()))
                     .param("durationMs", completion.durationMs())
                     .param("attemptId", completion.attemptId())
@@ -150,6 +168,91 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
             return true;
         });
         return Boolean.TRUE.equals(recorded);
+    }
+
+    @Override
+    public List<ExpiredLease> findExpiredLeases(Instant now, int limit) {
+        return jdbcClient.sql("""
+                        SELECT id, locked_by, attempt_count, cycle_attempt_count
+                        FROM notification_events
+                        WHERE delivery_status = 'PROCESSING'
+                          AND locked_until < :now
+                        ORDER BY locked_until
+                        LIMIT :limit
+                        """)
+                .param("now", toTimestamp(now))
+                .param("limit", limit)
+                .query((rs, rowNum) -> new ExpiredLease(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("locked_by"),
+                        rs.getInt("attempt_count"),
+                        rs.getInt("cycle_attempt_count")))
+                .list();
+    }
+
+    @Override
+    public boolean recoverLease(LeaseRecovery recovery) {
+        ExpiredLease lease = recovery.lease();
+        DeliveryDecision decision = recovery.decision();
+        Boolean recovered = transactionTemplate.execute(status -> {
+            int updated = jdbcClient.sql("""
+                            UPDATE notification_events
+                            SET delivery_status = :status,
+                                next_attempt_at = :nextAttemptAt,
+                                last_error      = :lastError,
+                                locked_by       = NULL,
+                                locked_until    = NULL,
+                                updated_at      = :now
+                            WHERE id = :id
+                              AND delivery_status = 'PROCESSING'
+                              AND locked_by = :lockedBy
+                              AND attempt_count = :attemptNumber
+                              AND locked_until < :now
+                            """)
+                    .param("status", decision.status().name())
+                    .param("nextAttemptAt", toTimestamp(decision.nextAttemptAt()))
+                    .param("lastError", summaryOf(decision.lastError()))
+                    .param("now", toTimestamp(recovery.now()))
+                    .param("id", lease.notificationEventId())
+                    .param("lockedBy", lease.lockedBy())
+                    .param("attemptNumber", lease.attemptNumber())
+                    .update();
+            if (updated == 0) {
+                return false;
+            }
+
+            jdbcClient.sql("""
+                            UPDATE delivery_attempts
+                            SET status        = :status,
+                                error_code    = :errorCode,
+                                error_message = :errorMessage,
+                                completed_at  = :now
+                            WHERE notification_event_id = :id
+                              AND attempt_number = :attemptNumber
+                              AND status = 'IN_PROGRESS'
+                            """)
+                    .param("status", decision.attemptStatus().name())
+                    .param("errorCode", codeOf(decision.attemptError()))
+                    .param("errorMessage", messageOf(decision.attemptError()))
+                    .param("now", toTimestamp(recovery.now()))
+                    .param("id", lease.notificationEventId())
+                    .param("attemptNumber", lease.attemptNumber())
+                    .update();
+            return true;
+        });
+        return Boolean.TRUE.equals(recovered);
+    }
+
+    private static String summaryOf(DeliveryError error) {
+        return error == null ? null : error.summary();
+    }
+
+    private static String codeOf(DeliveryError error) {
+        return error == null ? null : error.code();
+    }
+
+    private static String messageOf(DeliveryError error) {
+        return error == null ? null : error.message();
     }
 
     private void insertInProgressAttempt(DeliveryTask task, Instant now) {
@@ -167,18 +270,33 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                 .update();
     }
 
-    private static DeliveryTask toTask(ResultSet rs, Instant claimedAt) throws SQLException {
-        return new DeliveryTask(
+    private static ClaimedRow toClaimedRow(ResultSet rs, int rowNum) throws SQLException {
+        return new ClaimedRow(
                 rs.getObject("id", UUID.class),
-                UUID.randomUUID(),
                 rs.getInt("attempt_count"),
-                AttemptTrigger.of(rs.getInt("cycle_attempt_count"), rs.getInt("replay_count")),
+                rs.getInt("cycle_attempt_count"),
+                rs.getInt("replay_count"),
                 rs.getString("event_id"),
                 rs.getString("client_id"),
                 rs.getString("event_type"),
                 rs.getString("content"),
                 toInstant(rs.getTimestamp("event_created_at")),
-                rs.getString("webhook_url"),
-                claimedAt);
+                rs.getString("webhook_url"));
+    }
+
+    private record ClaimedRow(UUID id, int attemptCount, int cycleAttemptCount, int replayCount, String eventId,
+                              String clientId, String eventType, String content, Instant eventCreatedAt,
+                              String webhookUrl) {
+
+        DeliveryTask toTask(UUID attemptId, Instant claimedAt) {
+            return new DeliveryTask(id, attemptId, attemptCount, cycleAttemptCount,
+                    AttemptTrigger.of(cycleAttemptCount, replayCount), eventId, clientId, eventType, content,
+                    eventCreatedAt, webhookUrl, claimedAt);
+        }
+
+        @Override
+        public String toString() {
+            return "ClaimedRow[id=%s, eventId=%s, attemptCount=%d]".formatted(id, eventId, attemptCount);
+        }
     }
 }

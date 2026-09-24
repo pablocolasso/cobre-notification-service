@@ -59,6 +59,8 @@ class JdkWebhookClientTest {
         assertThat(request.headers().getFirst("X-Cobre-Event-Type")).isEqualTo("credit_card_payment");
         assertThat(request.headers().getFirst("X-Cobre-Delivery-Attempt")).isEqualTo("1");
         assertThat(request.headers().getFirst("Content-Type")).isEqualTo("application/json");
+        assertThat(request.protocol()).isEqualTo("HTTP/1.1");
+        assertThat(request.headers().containsKey("Upgrade")).isFalse();
 
         JsonNode body = jsonMapper.readTree(request.body());
         assertThat(body.get("notification_event_id").asString()).isEqualTo(task.notificationEventId().toString());
@@ -71,6 +73,12 @@ class JdkWebhookClientTest {
     @Test
     void reportsErrorStatus() {
         assertThat(client.deliver(task(server.url("/error")))).isEqualTo(new HttpResponseReceived(500));
+    }
+
+    @Test
+    void reportsRetryAfterOnRateLimit() {
+        assertThat(client.deliver(task(server.url("/rate-limited"))))
+                .isEqualTo(new HttpResponseReceived(429, Duration.ofSeconds(1)));
     }
 
     @Test
@@ -113,7 +121,7 @@ class JdkWebhookClientTest {
     }
 
     private static DeliveryTask task(String url) {
-        return new DeliveryTask(UUID.randomUUID(), UUID.randomUUID(), 1, AttemptTrigger.INITIAL,
+        return new DeliveryTask(UUID.randomUUID(), UUID.randomUUID(), 1, 1, AttemptTrigger.INITIAL,
                 "EVT-" + UUID.randomUUID(), "CLIENT001", "credit_card_payment",
                 "Credit card payment received for $150.00", Instant.parse("2026-09-23T12:00:00Z"), url,
                 Instant.parse("2026-09-23T12:00:01Z"));

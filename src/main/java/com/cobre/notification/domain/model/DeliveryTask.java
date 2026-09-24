@@ -10,6 +10,7 @@ public record DeliveryTask(
         UUID notificationEventId,
         UUID attemptId,
         int attemptNumber,
+        int cycleAttemptNumber,
         AttemptTrigger trigger,
         String eventId,
         String clientId,

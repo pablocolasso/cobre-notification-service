@@ -1,133 +1,115 @@
 package com.cobre.notification.application.service;
 
 import com.cobre.notification.application.port.in.DeliverDueNotificationsUseCase;
-import com.cobre.notification.application.port.out.DeliveryCompletion;
+import com.cobre.notification.application.port.out.ClaimRequest;
 import com.cobre.notification.application.port.out.DeliveryRepository;
-import com.cobre.notification.application.port.out.WebhookClient;
-import com.cobre.notification.domain.model.AttemptStatus;
-import com.cobre.notification.domain.model.DeliveryError;
-import com.cobre.notification.domain.model.DeliveryOutcome;
-import com.cobre.notification.domain.model.DeliveryResult;
-import com.cobre.notification.domain.model.DeliveryResult.HttpResponseReceived;
-import com.cobre.notification.domain.model.DeliveryResult.TransportFailure;
-import com.cobre.notification.domain.model.DeliveryStatus;
+import com.cobre.notification.application.port.out.IdGenerator;
 import com.cobre.notification.domain.model.DeliveryTask;
-import com.cobre.notification.domain.policy.DeliveryResultClassifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 
+/**
+ * Claims as many due notifications as there are free delivery slots and hands each one to the executor. The
+ * semaphore bounds in-flight deliveries per instance; the claim never takes more than can start right away, so
+ * nothing sits leased while waiting for a slot.
+ */
 public class DeliverNotificationService implements DeliverDueNotificationsUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(DeliverNotificationService.class);
 
     private final DeliveryRepository deliveries;
-    private final WebhookClient webhookClient;
-    private final DeliveryResultClassifier classifier;
+    private final DeliveryAttemptProcessor processor;
+    private final Executor executor;
+    private final Semaphore slots;
+    private final IdGenerator ids;
     private final Clock clock;
     private final String workerId;
-    private final int batchSize;
     private final Duration leaseDuration;
 
     public DeliverNotificationService(DeliveryRepository deliveries,
-                                      WebhookClient webhookClient,
-                                      DeliveryResultClassifier classifier,
+                                      DeliveryAttemptProcessor processor,
+                                      Executor executor,
+                                      int maxConcurrency,
+                                      IdGenerator ids,
                                       Clock clock,
                                       String workerId,
-                                      int batchSize,
                                       Duration leaseDuration) {
+        if (maxConcurrency < 1) {
+            throw new IllegalArgumentException("maxConcurrency must be >= 1");
+        }
         this.deliveries = deliveries;
-        this.webhookClient = webhookClient;
-        this.classifier = classifier;
+        this.processor = processor;
+        this.executor = executor;
+        this.slots = new Semaphore(maxConcurrency);
+        this.ids = ids;
         this.clock = clock;
         this.workerId = workerId;
-        this.batchSize = batchSize;
         this.leaseDuration = leaseDuration;
     }
 
     @Override
     public int deliverDueNotifications() {
-        Instant now = clock.instant();
-        List<DeliveryTask> tasks = deliveries.claimDue(workerId, batchSize, now, now.plus(leaseDuration));
+        int reserved = slots.drainPermits();
+        if (reserved == 0) {
+            return 0;
+        }
+
+        List<DeliveryTask> tasks;
+        try {
+            Instant now = clock.instant();
+            tasks = deliveries.claimDue(new ClaimRequest(workerId, newIds(reserved), now, now.plus(leaseDuration)));
+        } catch (RuntimeException e) {
+            slots.release(reserved);
+            throw e;
+        }
+        slots.release(reserved - tasks.size());
+
         for (DeliveryTask task : tasks) {
-            deliver(task);
+            dispatch(task);
         }
         return tasks.size();
     }
 
-    private void deliver(DeliveryTask task) {
-        DeliveryResult result = invokeWebhook(task);
-        DeliveryOutcome outcome = classifier.classify(result);
-        DeliveryCompletion completion = toCompletion(task, result, outcome, clock.instant());
+    public int availableSlots() {
+        return slots.availablePermits();
+    }
 
-        boolean recorded;
+    private void dispatch(DeliveryTask task) {
         try {
-            recorded = deliveries.recordResult(completion);
-        } catch (RuntimeException e) {
-            log.atError()
+            executor.execute(() -> {
+                try {
+                    processor.process(task);
+                } finally {
+                    slots.release();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            slots.release();
+            log.atWarn()
+                    .setMessage("Delivery rejected by the executor; lease recovery will retry it")
                     .addKeyValue("notification_event_id", task.notificationEventId())
+                    .addKeyValue("event_id", task.eventId())
+                    .addKeyValue("client_id", task.clientId())
                     .addKeyValue("attempt_number", task.attemptNumber())
-                    .addKeyValue("error_type", e.getClass().getSimpleName())
-                    .log("Could not persist delivery result; the lease will expire and the attempt will be recovered");
-            return;
-        }
-
-        var logEvent = recorded ? log.atInfo() : log.atWarn();
-        logEvent.addKeyValue("notification_event_id", task.notificationEventId())
-                .addKeyValue("event_id", task.eventId())
-                .addKeyValue("client_id", task.clientId())
-                .addKeyValue("attempt_number", task.attemptNumber())
-                .addKeyValue("outcome", outcome.name().toLowerCase())
-                .addKeyValue("http_status", completion.httpStatus())
-                .addKeyValue("error_code", completion.error() == null ? null : completion.error().code())
-                .addKeyValue("duration_ms", completion.durationMs())
-                .log(recorded ? "Delivery attempt recorded" : "Lease lost before recording the delivery result");
-    }
-
-    private DeliveryResult invokeWebhook(DeliveryTask task) {
-        try {
-            return webhookClient.deliver(task);
-        } catch (RuntimeException e) {
-            return new TransportFailure(new DeliveryError("unexpected_error", e.getClass().getSimpleName()));
+                    .log();
         }
     }
 
-    private DeliveryCompletion toCompletion(DeliveryTask task, DeliveryResult result, DeliveryOutcome outcome,
-                                            Instant completedAt) {
-        DeliveryStatus notificationStatus = outcome == DeliveryOutcome.SUCCESS
-                ? DeliveryStatus.COMPLETED
-                : DeliveryStatus.FAILED;
-
-        Integer httpStatus = result instanceof HttpResponseReceived response ? response.statusCode() : null;
-        DeliveryError error = switch (result) {
-            case HttpResponseReceived response when outcome == DeliveryOutcome.SUCCESS -> null;
-            case HttpResponseReceived response -> DeliveryError.httpStatus(response.statusCode());
-            case TransportFailure failure -> failure.error();
-        };
-
-        return new DeliveryCompletion(
-                task.notificationEventId(),
-                task.attemptId(),
-                workerId,
-                notificationStatus,
-                toAttemptStatus(outcome),
-                httpStatus,
-                error,
-                completedAt,
-                notificationStatus == DeliveryStatus.COMPLETED ? completedAt : null,
-                null,
-                Duration.between(task.claimedAt(), completedAt).toMillis());
-    }
-
-    private static AttemptStatus toAttemptStatus(DeliveryOutcome outcome) {
-        return switch (outcome) {
-            case SUCCESS -> AttemptStatus.SUCCESS;
-            case RETRYABLE_FAILURE -> AttemptStatus.RETRYABLE_FAILURE;
-            case PERMANENT_FAILURE -> AttemptStatus.PERMANENT_FAILURE;
-        };
+    private List<UUID> newIds(int count) {
+        List<UUID> result = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            result.add(ids.newId());
+        }
+        return result;
     }
 }

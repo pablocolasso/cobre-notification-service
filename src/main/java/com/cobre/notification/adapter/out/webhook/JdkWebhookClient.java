@@ -21,8 +21,9 @@ import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 
 /**
- * Redirects are never followed: a redirect could point the request at an internal address.
- * Error messages are generated here and never include the URL, response body or event content.
+ * Redirects are never followed: a redirect could point the request at an internal address. HTTP/1.1 is forced so
+ * cleartext requests do not carry an {@code Upgrade: h2c} attempt. Error messages are generated here and never
+ * include the URL, response body or event content.
  */
 @Component
 public class JdkWebhookClient implements WebhookClient, AutoCloseable {
@@ -42,6 +43,7 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
         this.requestTimeout = properties.requestTimeout();
         this.jsonMapper = jsonMapper;
         this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(connectTimeout)
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
@@ -61,12 +63,13 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
                     .POST(HttpRequest.BodyPublishers.ofByteArray(jsonMapper.writeValueAsBytes(WebhookPayload.from(task))))
                     .build();
         } catch (IllegalArgumentException e) {
-            return failure("invalid_destination", "Webhook URL is not a valid http(s) URI");
+            return failure(DeliveryError.INVALID_DESTINATION, "Webhook URL is not a valid http(s) URI");
         }
 
         try {
             HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-            return new HttpResponseReceived(response.statusCode());
+            return new HttpResponseReceived(response.statusCode(),
+                    RetryAfter.parse(response.headers().firstValue("Retry-After").orElse(null)));
         } catch (HttpConnectTimeoutException e) {
             return failure("connect_timeout", "No connection within " + connectTimeout.toMillis() + " ms");
         } catch (HttpTimeoutException e) {

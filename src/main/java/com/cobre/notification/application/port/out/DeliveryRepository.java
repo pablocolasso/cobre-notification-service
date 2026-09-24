@@ -8,15 +8,21 @@ import java.util.List;
 public interface DeliveryRepository {
 
     /**
-     * Atomically leases up to {@code batchSize} due notifications to {@code workerId}, skipping rows locked by other
-     * workers, and records an in-progress attempt for each one.
+     * Leases up to {@code request.limit()} due notifications to the worker and records an in-progress attempt for
+     * each, in one short transaction. Rows locked by a concurrent claim are skipped, never waited for.
      */
-    List<DeliveryTask> claimDue(String workerId, int batchSize, Instant now, Instant lockedUntil);
+    List<DeliveryTask> claimDue(ClaimRequest request);
 
     /**
-     * Persists an attempt result, fenced by the lease.
-     *
-     * @return {@code false} if the worker no longer holds the lease; nothing is written in that case.
+     * @return {@code false} if the lease was lost (expired and recovered, or taken by another attempt); nothing is
+     * written in that case.
      */
     boolean recordResult(DeliveryCompletion completion);
+
+    List<ExpiredLease> findExpiredLeases(Instant now, int limit);
+
+    /**
+     * @return {@code false} if the lease changed since it was read (another recoverer won, or the result arrived).
+     */
+    boolean recoverLease(LeaseRecovery recovery);
 }

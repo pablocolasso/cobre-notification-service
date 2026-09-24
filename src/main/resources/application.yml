@@ -1,6 +1,9 @@
 spring:
   application:
     name: cobre-notification-service
+  threads:
+    virtual:
+      enabled: true
   jpa:
     open-in-view: false
     hibernate:
@@ -58,11 +61,16 @@ app:
         multiplier: 2.0
         max-interval: 30s
   delivery:
-    batch-size: 20
     lease-duration: 60s
     worker:
       enabled: true
       poll-interval: 500ms
+      max-concurrency: 20
+      recovery-batch-size: 100
+    retry:
+      base-delay: 5s
+      max-delay: 10m
+      max-attempts: 5
   webhook:
     connect-timeout: 2s
     request-timeout: 5s
