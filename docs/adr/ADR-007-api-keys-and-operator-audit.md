@@ -1,6 +1,6 @@
 # ADR-007 - Named API keys, operator role and client_id handling
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-09-24
 
 ## Context

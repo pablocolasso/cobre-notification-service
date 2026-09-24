@@ -1,6 +1,6 @@
 # ADR-006 - Notification event API: filters, pagination and 404 cross-tenant
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-09-24
 
 ## Context
