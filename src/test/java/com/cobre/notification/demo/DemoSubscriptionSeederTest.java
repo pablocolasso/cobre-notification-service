@@ -20,19 +20,19 @@ class DemoSubscriptionSeederTest {
     @Test
     void upsertsEverySubscriptionUsingTheDefaultUrlUnlessOverridden() {
         var properties = new DemoProperties("https://default.example/hook", List.of(
-                new DemoSubscription("CLIENT001", "credit_card_payment", null),
-                new DemoSubscription("CLIENT003", "credit_cashback", "https://failing.example/hook")));
+                new DemoSubscription("CLIENT001", "credit_card_payment", null, null),
+                new DemoSubscription("CLIENT003", "credit_cashback", "https://failing.example/hook", "s3cret")));
 
         new DemoSubscriptionSeeder(properties, subscriptions, UUID::randomUUID).run(null);
 
         assertThat(subscriptions.upserts).containsExactly(
-                "CLIENT001|credit_card_payment|https://default.example/hook",
-                "CLIENT003|credit_cashback|https://failing.example/hook");
+                "CLIENT001|credit_card_payment|https://default.example/hook|null",
+                "CLIENT003|credit_cashback|https://failing.example/hook|s3cret");
     }
 
     @Test
     void failsFastWhenNoUrlIsConfigured() {
-        var properties = new DemoProperties(" ", List.of(new DemoSubscription("CLIENT001", "credit_card_payment", null)));
+        var properties = new DemoProperties(" ", List.of(new DemoSubscription("CLIENT001", "credit_card_payment", null, null)));
 
         assertThatThrownBy(() -> new DemoSubscriptionSeeder(properties, subscriptions, UUID::randomUUID).run(null))
                 .isInstanceOf(IllegalStateException.class)
@@ -50,8 +50,8 @@ class DemoSubscriptionSeederTest {
         }
 
         @Override
-        public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl) {
-            upserts.add(clientId + "|" + eventType + "|" + webhookUrl);
+        public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl, String signingSecret) {
+            upserts.add(clientId + "|" + eventType + "|" + webhookUrl + "|" + signingSecret);
         }
     }
 }

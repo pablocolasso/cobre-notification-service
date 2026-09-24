@@ -43,7 +43,8 @@ class DemoSubscriptionSeeder implements ApplicationRunner {
                 throw new IllegalStateException("No webhook URL for demo subscription "
                         + subscription.clientId() + "/" + subscription.eventType());
             }
-            subscriptions.upsertActive(ids.newId(), subscription.clientId(), subscription.eventType(), webhookUrl);
+            subscriptions.upsertActive(ids.newId(), subscription.clientId(), subscription.eventType(), webhookUrl,
+                    subscription.signingSecret());
             log.atInfo()
                     .setMessage("Demo subscription upserted")
                     .addKeyValue("client_id", subscription.clientId())

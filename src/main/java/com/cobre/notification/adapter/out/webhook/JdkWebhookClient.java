@@ -1,10 +1,13 @@
 package com.cobre.notification.adapter.out.webhook;
 
+import com.cobre.notification.adapter.out.webhook.WebhookDestinationGuard.Decision;
+import com.cobre.notification.adapter.out.webhook.WebhookSigner.Signature;
 import com.cobre.notification.application.port.out.WebhookClient;
 import com.cobre.notification.config.WebhookProperties;
 import com.cobre.notification.domain.model.DeliveryError;
 import com.cobre.notification.domain.model.DeliveryResult;
 import com.cobre.notification.domain.model.DeliveryResult.HttpResponseReceived;
+import com.cobre.notification.domain.model.DeliveryResult.InvalidDestination;
 import com.cobre.notification.domain.model.DeliveryResult.TransportFailure;
 import com.cobre.notification.domain.model.DeliveryTask;
 import org.springframework.stereotype.Component;
@@ -18,12 +21,13 @@ import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
+import java.time.Clock;
 import java.time.Duration;
 
 /**
  * Redirects are never followed: a redirect could point the request at an internal address. HTTP/1.1 is forced so
- * cleartext requests do not carry an {@code Upgrade: h2c} attempt. Error messages are generated here and never
- * include the URL, response body or event content.
+ * cleartext requests do not carry an {@code Upgrade: h2c} attempt. The destination is checked before any I/O.
+ * Error messages never include the URL, response body, event content or signing secret.
  */
 @Component
 public class JdkWebhookClient implements WebhookClient, AutoCloseable {
@@ -37,11 +41,18 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
     private final JsonMapper jsonMapper;
     private final Duration connectTimeout;
     private final Duration requestTimeout;
+    private final WebhookDestinationGuard destinationGuard;
+    private final WebhookSigner signer;
+    private final Clock clock;
 
-    public JdkWebhookClient(WebhookProperties properties, JsonMapper jsonMapper) {
+    public JdkWebhookClient(WebhookProperties properties, JsonMapper jsonMapper, WebhookDestinationGuard destinationGuard,
+                            WebhookSigner signer, Clock clock) {
         this.connectTimeout = properties.connectTimeout();
         this.requestTimeout = properties.requestTimeout();
         this.jsonMapper = jsonMapper;
+        this.destinationGuard = destinationGuard;
+        this.signer = signer;
+        this.clock = clock;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(connectTimeout)
@@ -51,7 +62,19 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
 
     @Override
     public DeliveryResult deliver(DeliveryTask task) {
-        HttpRequest request;
+        Decision decision = destinationGuard.evaluate(task.webhookUrl());
+        if (decision instanceof Decision.Reject reject) {
+            return new InvalidDestination(new DeliveryError(DeliveryError.INVALID_DESTINATION, reject.reason()));
+        }
+
+        byte[] body;
+        try {
+            body = jsonMapper.writeValueAsBytes(WebhookPayload.from(task));
+        } catch (RuntimeException e) {
+            return failure(DeliveryError.INVALID_DESTINATION, "Could not serialize webhook payload");
+        }
+
+        HttpRequest.Builder request;
         try {
             request = HttpRequest.newBuilder(URI.create(task.webhookUrl()))
                     .timeout(requestTimeout)
@@ -60,14 +83,14 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
                     .header(EVENT_ID_HEADER, task.eventId())
                     .header(EVENT_TYPE_HEADER, task.eventType())
                     .header(DELIVERY_ATTEMPT_HEADER, Integer.toString(task.attemptNumber()))
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(jsonMapper.writeValueAsBytes(WebhookPayload.from(task))))
-                    .build();
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(body));
         } catch (IllegalArgumentException e) {
-            return failure(DeliveryError.INVALID_DESTINATION, "Webhook URL is not a valid http(s) URI");
+            return new InvalidDestination(new DeliveryError(DeliveryError.INVALID_DESTINATION, "malformed_url"));
         }
+        signer.sign(task.signingSecret(), body, clock.instant()).ifPresent(signature -> applySignature(request, signature));
 
         try {
-            HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+            HttpResponse<Void> response = httpClient.send(request.build(), HttpResponse.BodyHandlers.discarding());
             return new HttpResponseReceived(response.statusCode(),
                     RetryAfter.parse(response.headers().firstValue("Retry-After").orElse(null)));
         } catch (HttpConnectTimeoutException e) {
@@ -82,6 +105,11 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
             Thread.currentThread().interrupt();
             return failure("interrupted", "Delivery interrupted");
         }
+    }
+
+    private static void applySignature(HttpRequest.Builder request, Signature signature) {
+        request.header(WebhookSigner.TIMESTAMP_HEADER, signature.timestamp());
+        request.header(WebhookSigner.SIGNATURE_HEADER, signature.headerValue());
     }
 
     @Override

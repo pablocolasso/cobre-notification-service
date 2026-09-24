@@ -11,6 +11,6 @@ import java.util.List;
 @ConfigurationProperties("app.demo")
 public record DemoProperties(String webhookUrl, @DefaultValue List<DemoSubscription> subscriptions) {
 
-    public record DemoSubscription(String clientId, String eventType, String webhookUrl) {
+    public record DemoSubscription(String clientId, String eventType, String webhookUrl, String signingSecret) {
     }
 }
