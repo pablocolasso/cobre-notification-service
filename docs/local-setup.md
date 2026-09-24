@@ -1,11 +1,21 @@
 # Local and presentation setup
 
 ```bash
-docker compose up --build
+docker compose up --build --wait
 ```
 
 Profiles on the `app` service: `local,demo`. WireMock is `webhook-mock:8080` inside the network and
-`localhost:8089` on the host. API: `http://localhost:8080`. Actuator: `http://localhost:8081`.
+`localhost:8089` on the host. API: `http://localhost:8080`. Management (health, metrics,
+prometheus): `http://localhost:8081`. Do not publish 8081 on a public network.
+
+Publish demo events (see [README](../README.md) for the full script):
+
+```bash
+docker compose exec -T kafka /opt/kafka/bin/kafka-console-producer.sh \
+  --bootstrap-server kafka:29092 --topic platform.events.v1 \
+  --property parse.key=true --property key.separator='|' \
+  < demo/platform-events.jsonl
+```
 
 ## Presentation day
 
