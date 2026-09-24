@@ -13,6 +13,11 @@ class PlatformEventMessageMapper {
 
     static final int SUPPORTED_SCHEMA_VERSION = 1;
 
+    /**
+     * PostgreSQL rejects NUL in text columns; catching it here keeps it a validation error instead of a database one.
+     */
+    private static final char NUL = '\u0000';
+
     private final JsonMapper jsonMapper;
 
     PlatformEventMessageMapper(JsonMapper jsonMapper) {
@@ -29,6 +34,9 @@ class PlatformEventMessageMapper {
             message = jsonMapper.readValue(json, PlatformEventMessage.class);
         } catch (JacksonException e) {
             throw new InvalidPlatformEventException("malformed_json");
+        }
+        if (message == null) {
+            throw new InvalidPlatformEventException("null_message");
         }
 
         if (message.schemaVersion() == null || message.schemaVersion() != SUPPORTED_SCHEMA_VERSION) {
@@ -51,6 +59,7 @@ class PlatformEventMessageMapper {
         if (value.length() > maxLength) {
             throw new InvalidPlatformEventException("too_long_" + field);
         }
+        rejectNul(value, field);
         return value;
     }
 
@@ -58,7 +67,14 @@ class PlatformEventMessageMapper {
         if (content == null) {
             throw new InvalidPlatformEventException("missing_content");
         }
+        rejectNul(content, "content");
         return content;
+    }
+
+    private static void rejectNul(String value, String field) {
+        if (value.indexOf(NUL) >= 0) {
+            throw new InvalidPlatformEventException("invalid_characters_" + field);
+        }
     }
 
     private static Instant parseInstant(String occurredAt) {

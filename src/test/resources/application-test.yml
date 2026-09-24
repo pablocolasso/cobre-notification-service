@@ -4,6 +4,11 @@ spring:
       group-id: notification-service-test
 
 app:
+  kafka:
+    consumer:
+      retry:
+        initial-interval: 100ms
+        max-interval: 500ms
   delivery:
     worker:
       enabled: false

@@ -46,6 +46,41 @@ class PlatformEventMessageMapperTest {
                 .isEqualTo(expectedReason);
     }
 
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "null     | null_message",
+            "'  '     | empty_message",
+            "[]       | malformed_json",
+            "42       | malformed_json"
+    })
+    void rejectsNonObjectMessages(String json, String expectedReason) {
+        assertThatThrownBy(() -> mapper.toPlatformEvent(json))
+                .isInstanceOf(InvalidPlatformEventException.class)
+                .extracting(e -> ((InvalidPlatformEventException) e).reason())
+                .isEqualTo(expectedReason);
+    }
+
+    @Test
+    void rejectsNulCharacterInContentAndIdentifiers() {
+        String nulInContent = """
+                {"schema_version":1,"event_id":"E","event_type":"t","client_id":"C",
+                 "occurred_at":"2026-09-23T12:00:00Z","content":"before\\u0000after"}
+                """;
+        String nulInEventId = """
+                {"schema_version":1,"event_id":"E\\u0000","event_type":"t","client_id":"C",
+                 "occurred_at":"2026-09-23T12:00:00Z","content":"x"}
+                """;
+
+        assertThatThrownBy(() -> mapper.toPlatformEvent(nulInContent))
+                .isInstanceOf(InvalidPlatformEventException.class)
+                .extracting(e -> ((InvalidPlatformEventException) e).reason())
+                .isEqualTo("invalid_characters_content");
+        assertThatThrownBy(() -> mapper.toPlatformEvent(nulInEventId))
+                .isInstanceOf(InvalidPlatformEventException.class)
+                .extracting(e -> ((InvalidPlatformEventException) e).reason())
+                .isEqualTo("invalid_characters_event_id");
+    }
+
     @Test
     void errorMessageNeverContainsPayload() {
         String secretContent = "Transfer to account #4567";

@@ -33,4 +33,9 @@ public class TestcontainersConfiguration {
         return TopicBuilder.name(topic).partitions(3).replicas(1).build();
     }
 
+    @Bean
+    NewTopic platformEventsDeadLetterTopic(@Value("${app.kafka.topics.platform-events-dlt}") String topic) {
+        return TopicBuilder.name(topic).partitions(3).replicas(1).build();
+    }
+
 }
