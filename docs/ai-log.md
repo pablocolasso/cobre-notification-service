@@ -419,7 +419,8 @@ Time per sub-step (agent wall clock, from commit timestamps; human review not in
   - `DefaultErrorHandler.defaultFalse()` retries only transient data-access exceptions, with unlimited
     exponential backoff, without committing the offset.
   - Every other exception goes to `platform.events.v1.DLT` through `DeadLetterPublishingRecoverer`, and the
-    counter `kafka.dlt.published{reason=invalid_event|unexpected_error}` is incremented.
+    counter `notification.dlt.published{reason=invalid_event|unexpected_error}` is incremented
+    (name used from Phase 5; Phase 2 first shipped it as `kafka.dlt.published`).
   - The exception message and stack trace headers are excluded. They are replaced by
     `x-cobre-dlt-reason` / `x-cobre-dlt-detail`, which take values from a closed set.
   - The mapper rejects the JSON literal `null` (`null_message`) and NUL characters
@@ -739,13 +740,78 @@ Time per sub-step (agent wall clock; human review not included):
 
 ### Human analysis
 
+Reviewed. Accept Phase 5. The only follow-up is the DLT metric name: Phase 2 introduced
+`kafka.dlt.published`; Phase 5 renamed the counter to `notification.dlt.published`. Use that name
+in code, the plan, observability notes and this log.
+
+### Decision
+
+- Accept Phase 5.
+- Canonical DLT counter: `notification.dlt.published`.
+- Execute Phase 6 (docs and presentation).
+
+### Resulting change
+
+Commits `affa5e6`, `5d9098f`, `cc316a5`, `625a462`, `2e89521` on `develop` (no push). Plan §14 and
+the Phase 2 ai-log line now use `notification.dlt.published`.
+
+---
+
+## Entry 10 - Phase 6 docs and presentation
+
+**Date:** 2026-09-24
+**Type:** documentation
+
+### Goal
+
+README, architecture diagrams aligned with the code, API + webhook contract, remaining ADRs,
+OWASP write-up, local-setup check, OpenAPI examples. Unify `notification.dlt.published`. Final
+phase; no business-logic changes.
+
+### Prompt (summary)
+
+"Execute Phase 6 from plan-v2. Show the file list first. README (overview, compose --wait, env
+vars, demo script). architecture.md Mermaid from the plan vs code. api.md three resources +
+webhook. Finish ADR-001..007. Expand security.md. Commits per sub-step, no push, no tests or
+dependency changes."
+
+### Relevant AI output
+
+Time per sub-step (agent wall clock):
+
+| Sub-step | Commit | Time |
+|---|---|---|
+| DLT name + Phase 5 review | `0c9bca0` | ~5 min |
+| README + local-setup | `81e4649` | ~10 min |
+| architecture.md | `f7647ce` | ~10 min |
+| api.md + OpenAPI examples | `ee5d16a` | ~10 min |
+| ADRs 001–007 | `5e2eeea` | ~10 min |
+| security.md | `f1335a2` | ~5 min |
+
+OpenAPI examples live on list, get and replay, plus schema examples on the DTOs. `/v3/api-docs` was
+already covered by `OpenApiSmokeTest` (not re-run as a suite in this phase; no test changes).
+
+### Deviations
+
+- Webhook contract is a section of `docs/api.md`, not a separate `docs/webhook-contract.md`.
+- `docs/testing.md` and a full A1–A14 dump in assumptions.md were left out (not in the phase
+  prompt). A13 remains in `docs/assumptions.md`.
+- Presentation against a live public HTTPS URL was not executed here.
+
+### Not verified
+
+- `docker compose up --wait` + jsonl produce on this machine in this session.
+- Swagger UI clicked by hand (spec generation is what the existing smoke test asserts).
+
+### Human analysis
+
 *(pending review)*
 
 ### Decision
 
-- Do not start Phase 6 until it is explicitly requested.
+- Phase 6 is the last implementation phase.
 
 ### Resulting change
 
-Commits `affa5e6`, `5d9098f`, `cc316a5`, `625a462` on `develop` (no push). `docs/observability.md` records metrics, MDC and suggested alerts.
+Docs on `develop` (no push): `0c9bca0`, `81e4649`, `f7647ce`, `ee5d16a`, `5e2eeea`, `f1335a2`, plus this entry.
 
