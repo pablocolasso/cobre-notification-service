@@ -88,7 +88,7 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
             assertThat(attempt.get("attempt_trigger")).isEqualTo("INITIAL");
         });
 
-        mockMvc.perform(get("/notification_events/{id}", notification.get("id")))
+        mockMvc.perform(get("/notification_events/{id}", notification.get("id")).header("X-API-Key", "test-ops"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.event_id").value(eventId))
                 .andExpect(jsonPath("$.delivery_status").value("completed"))
@@ -119,7 +119,7 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
                 .extracting(request -> request.headers().getFirst("Idempotency-Key"))
                 .containsOnly(notification.get("id").toString());
 
-        mockMvc.perform(get("/notification_events/{id}", notification.get("id")))
+        mockMvc.perform(get("/notification_events/{id}", notification.get("id")).header("X-API-Key", "test-ops"))
                 .andExpect(jsonPath("$.delivery_status").value("completed"))
                 .andExpect(jsonPath("$.delivery_attempts.length()").value(3));
     }

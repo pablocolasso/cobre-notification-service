@@ -120,5 +120,15 @@ class IngestPlatformEventServiceTest {
             }
             return saved.add(notification);
         }
+
+        @Override
+        public boolean saveAttemptIfAbsent(com.cobre.notification.domain.model.DeliveryAttempt attempt) {
+            return true;
+        }
+
+        @Override
+        public boolean requestReplay(com.cobre.notification.application.port.out.ReplayCommand command) {
+            return false;
+        }
     }
 }

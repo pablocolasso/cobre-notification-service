@@ -17,7 +17,13 @@ class OpenApiSmokeTest extends AbstractIntegrationTest {
     void openApiDocumentIsServed() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.openapi").exists());
+                .andExpect(jsonPath("$.openapi").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.apiKey.name").value("X-API-Key"))
+                .andExpect(jsonPath("$.paths['/notification_events'].get").exists())
+                .andExpect(jsonPath("$.paths['/notification_events/{notification_event_id}'].get").exists())
+                .andExpect(jsonPath("$.paths['/notification_events/{notification_event_id}/replay'].post").exists());
+        mockMvc.perform(get("/swagger-ui/index.html"))
+                .andExpect(status().isOk());
     }
 
 }
