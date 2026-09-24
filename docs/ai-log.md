@@ -713,7 +713,7 @@ Time per sub-step (agent wall clock; human review not included):
 | Counters and timers | `affa5e6` | ~15 min |
 | Backlog gauges | `5d9098f` | ~10 min |
 | Logging / MDC / health | `cc316a5` | ~15 min |
-| Docs + ai-log | *(this commit)* | ~5 min |
+| Docs + ai-log | `625a462` | ~5 min |
 
 - Port `NotificationMetrics` (no Micrometer in application). Adapter increments the named meters.
   DLT counter renamed from `kafka.dlt.published` to `notification.dlt.published`.
@@ -747,5 +747,5 @@ Time per sub-step (agent wall clock; human review not included):
 
 ### Resulting change
 
-Commits on `develop` (no push). `docs/observability.md` records metrics, MDC and suggested alerts.
+Commits `affa5e6`, `5d9098f`, `cc316a5`, `625a462` on `develop` (no push). `docs/observability.md` records metrics, MDC and suggested alerts.
 
