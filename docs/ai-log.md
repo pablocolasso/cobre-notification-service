@@ -112,7 +112,7 @@ final version and why. Do not implement anything from Phase 1."
 
 ### Human analysis
 
-Pending review.
+Reviewed
 
 ### Decision
 
@@ -173,3 +173,74 @@ Accept the three constraints and the test. Keep the reverse invariants out of sc
 - `src/test/java/com/cobre/notification/NotificationEventsSchemaConstraintsTest.java`: 4 tests, all green
   (suite: 7/7).
 - Phase 1 note: lease recovery must set `next_attempt_at` when moving a row back to RETRYING.
+
+---
+
+## Entry 4 - Phase 1 walking skeleton (ingestion, worker, API, compose)
+
+**Date:** 2026-09-23
+**Type:** code generation, test generation, verification
+
+### Goal
+
+End-to-end happy path: platform event on Kafka -> subscription check -> PostgreSQL -> scheduled worker ->
+webhook -> COMPLETED/FAILED, readable through `GET /notification_events` and `GET /notification_events/{id}`,
+runnable with `docker compose up`.
+
+### Prompt (summary)
+
+"Execute Phase 1 as in docs/plan-v2.md. The consumer never does HTTP: validate, persist PENDING with
+`next_attempt_at = now()`, ack. All delivery, including the first attempt, is done by the worker (single path:
+claim, lease, fencing; no after-commit nudge). Respect the V1 CHECKs; every UPDATE sets `updated_at`; ingestion
+uses `ON CONFLICT (event_id) DO NOTHING` with no prior SELECT. 2xx -> COMPLETED, anything else -> FAILED, behind
+an interface. No retries, auth, SSRF guard, HMAC, metrics or fixture seeder. One commit per sub-step."
+
+### Relevant AI output
+
+Time per sub-step (agent wall clock, from commit timestamps; human review not included):
+
+| Sub-step | Commit | Time |
+|---|---|---|
+| Ingestion | `ab136fe` | 22:17 - 22:23 (~6 min) |
+| Worker | `60a8eee` | 22:23 - 22:28 (~6 min) |
+| API | `b15235e` | 22:28 - 22:32 (~4 min) |
+| Compose + demo | `2d51099` | 22:32 - 22:37 (~5 min) |
+
+- Ingestion: `@KafkaListener` with manual Jackson mapping and field validation; invalid messages throw a
+  non-retryable exception and are skipped by `DefaultErrorHandler` (transient errors retry with exponential
+  backoff); `saveIfAbsent` via `INSERT ... ON CONFLICT (event_id) DO NOTHING`; ack after persistence.
+- Worker: `@Scheduled` fixed delay; claim with `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)
+  RETURNING` plus the IN_PROGRESS attempt in one short transaction; HTTP outside any transaction (JDK
+  `HttpClient`, no redirects, 2s/5s timeouts, `Idempotency-Key` = notification id); result update fenced by
+  `locked_by` + `PROCESSING`. Classification behind `DeliveryResultClassifier`.
+- API: immutable JPA entities (validated by `ddl-auto: validate`), deterministic order
+  `event_created_at DESC, id DESC`, `size <= 100`, snake_case DTOs, lowercase statuses, no `delivery_date`,
+  `webhook_url` masked to `scheme://host[:port]`, RFC 9457 problem details.
+- Compose: multi-stage Dockerfile, `app` service, demo subscription seeder for the 10 fixture pairs (one pointing
+  at the failing WireMock endpoint), `demo/platform-events.jsonl` with a duplicate and an unsubscribed type,
+  publish scripts for PowerShell and sh.
+- Tests: 69 green across 15 suites (unit with fakes, Testcontainers integration, E2E Kafka -> webhook -> API).
+- Deviations from plan v2 flagged by the AI:
+  - the persistence port was split into `NotificationEventRepository` (ingestion) and `DeliveryRepository`
+    (worker) after a compile error showed ingestion fakes had to implement delivery methods;
+  - minimal `DeliveryError` sanitizing (control chars, 500-char truncation) pulled forward from Phase 2;
+  - timestamps come from the application `Clock` rather than DB `now()` (assumes NTP-synced nodes);
+  - worker delivers sequentially within a tick (bounded executor is Phase 2);
+  - `client_id` on the list endpoint is an unauthenticated filter until Phase 3;
+  - invalid events are skipped, not sent to the DLT (Phase 2);
+  - SLF4J key-values are not rendered by the default console pattern (structured logging is Phase 5).
+
+### Human analysis
+
+Pending review
+
+### Decision
+
+Pending review
+
+### Resulting change
+
+Four commits (`ab136fe`, `60a8eee`, `b15235e`, `2d51099`) on top of `chore: phase 0 setup`. Manual demo on
+docker compose: 12 published events -> 10 notifications (duplicate deduplicated, unsubscribed type ignored),
+9 COMPLETED and 1 FAILED with `last_error = "http_status: HTTP 500"`; webhook received the expected headers and
+snake_case body; `content` absent from application logs.
