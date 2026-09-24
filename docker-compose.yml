@@ -88,6 +88,10 @@ services:
       WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-mock:8080/webhook/ok}
       WEBHOOK_FLAKY_URL: ${WEBHOOK_FLAKY_URL:-http://webhook-mock:8080/webhook/flaky}
       WEBHOOK_FAILING_URL: ${WEBHOOK_FAILING_URL:-http://webhook-mock:8080/webhook/error}
+      CLIENT001_API_KEY: ${CLIENT001_API_KEY:-dev-client-001}
+      CLIENT002_API_KEY: ${CLIENT002_API_KEY:-dev-client-002}
+      CLIENT003_API_KEY: ${CLIENT003_API_KEY:-dev-client-003}
+      OPS_API_KEY: ${OPS_API_KEY:-dev-ops}
     ports:
       - "8080:8080"
       - "8081:8081"
