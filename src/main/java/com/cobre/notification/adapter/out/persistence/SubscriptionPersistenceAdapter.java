@@ -32,18 +32,22 @@ class SubscriptionPersistenceAdapter implements SubscriptionRepository {
     }
 
     @Override
-    public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl) {
+    public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl, String signingSecret) {
         Instant now = clock.instant();
         jdbcClient.sql("""
-                        INSERT INTO subscriptions (id, client_id, event_type, webhook_url, active, created_at, updated_at)
-                        VALUES (:id, :clientId, :eventType, :webhookUrl, TRUE, :now, :now)
+                        INSERT INTO subscriptions (id, client_id, event_type, webhook_url, signing_secret, active,
+                                                   created_at, updated_at)
+                        VALUES (:id, :clientId, :eventType, :webhookUrl, :signingSecret, TRUE, :now, :now)
                         ON CONFLICT (client_id, event_type) WHERE active
-                        DO UPDATE SET webhook_url = EXCLUDED.webhook_url, updated_at = EXCLUDED.updated_at
+                        DO UPDATE SET webhook_url = EXCLUDED.webhook_url,
+                                      signing_secret = EXCLUDED.signing_secret,
+                                      updated_at = EXCLUDED.updated_at
                         """)
                 .param("id", id)
                 .param("clientId", clientId)
                 .param("eventType", eventType)
                 .param("webhookUrl", webhookUrl)
+                .param("signingSecret", signingSecret)
                 .param("now", PersistenceTime.toTimestamp(now))
                 .update();
     }
@@ -54,6 +58,7 @@ class SubscriptionPersistenceAdapter implements SubscriptionRepository {
                 entity.getClientId(),
                 entity.getEventType(),
                 entity.getWebhookUrl(),
-                entity.isActive());
+                entity.isActive(),
+                entity.getSigningSecret());
     }
 }

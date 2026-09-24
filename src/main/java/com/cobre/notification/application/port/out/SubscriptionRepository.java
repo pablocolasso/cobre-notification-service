@@ -10,8 +10,12 @@ public interface SubscriptionRepository {
     Optional<Subscription> findActive(String clientId, String eventType);
 
     /**
-     * Creates the active subscription with {@code id}, or updates the webhook URL of the existing one (whose id is
-     * kept).
+     * Creates the active subscription with {@code id}, or updates the webhook URL (and signing secret) of the
+     * existing one (whose id is kept).
      */
-    void upsertActive(UUID id, String clientId, String eventType, String webhookUrl);
+    void upsertActive(UUID id, String clientId, String eventType, String webhookUrl, String signingSecret);
+
+    default void upsertActive(UUID id, String clientId, String eventType, String webhookUrl) {
+        upsertActive(id, clientId, eventType, webhookUrl, null);
+    }
 }

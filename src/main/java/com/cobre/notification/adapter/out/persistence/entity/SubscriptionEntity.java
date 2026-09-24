@@ -29,6 +29,9 @@ public class SubscriptionEntity {
     @Column(name = "webhook_url", nullable = false, length = 2048)
     private String webhookUrl;
 
+    @Column(name = "signing_secret", length = 256)
+    private String signingSecret;
+
     @Column(nullable = false)
     private boolean active;
 
@@ -55,6 +58,10 @@ public class SubscriptionEntity {
 
     public String getWebhookUrl() {
         return webhookUrl;
+    }
+
+    public String getSigningSecret() {
+        return signingSecret;
     }
 
     public boolean isActive() {

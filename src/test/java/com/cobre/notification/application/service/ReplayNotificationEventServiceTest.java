@@ -204,8 +204,8 @@ class ReplayNotificationEventServiceTest {
         }
 
         @Override
-        public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl) {
-            put(new Subscription(id, clientId, eventType, webhookUrl, true));
+        public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl, String signingSecret) {
+            put(new Subscription(id, clientId, eventType, webhookUrl, true, signingSecret));
         }
     }
 }

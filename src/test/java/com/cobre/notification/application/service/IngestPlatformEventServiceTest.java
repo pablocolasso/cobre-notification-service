@@ -104,7 +104,7 @@ class IngestPlatformEventServiceTest {
         }
 
         @Override
-        public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl) {
+        public void upsertActive(UUID id, String clientId, String eventType, String webhookUrl, String signingSecret) {
             add(clientId, eventType, webhookUrl);
         }
     }

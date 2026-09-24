@@ -94,6 +94,27 @@ class NotificationEventPersistenceAdapterTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void claimReadsSigningSecretFromTheActiveSubscription() {
+        jdbcClient.sql("DELETE FROM subscriptions WHERE client_id = 'CLIENT001' AND event_type = 'credit_card_payment'")
+                .update();
+        jdbcClient.sql("""
+                        INSERT INTO subscriptions (id, client_id, event_type, webhook_url, signing_secret, active,
+                                                   created_at, updated_at)
+                        VALUES (:id, 'CLIENT001', 'credit_card_payment', 'https://client.example/hook', 'hook-secret',
+                                TRUE, :now, :now)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("now", java.sql.Timestamp.from(NOW))
+                .update();
+        notifications.saveIfAbsent(pending("EVT-SIGNED", NOW));
+
+        DeliveryTask task = claim("worker-1", 1, NOW).getFirst();
+
+        assertThat(task.signingSecret()).isEqualTo("hook-secret");
+        assertThat(task.toString()).doesNotContain("hook-secret");
+    }
+
+    @Test
     void claimSkipsRowsNotYetDueAndRowsAlreadyClaimed() {
         notifications.saveIfAbsent(pending("EVT-DUE", NOW));
         notifications.saveIfAbsent(pending("EVT-FUTURE", NOW.plusSeconds(30)));

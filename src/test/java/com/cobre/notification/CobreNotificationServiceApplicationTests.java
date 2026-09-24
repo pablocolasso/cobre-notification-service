@@ -17,13 +17,19 @@ class CobreNotificationServiceApplicationTests extends AbstractIntegrationTest {
 
     @Test
     void contextLoadsAndFlywayAppliesInitialSchema() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
 
         var tables = jdbcTemplate.queryForList(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'",
                 String.class);
 
         assertThat(tables).contains("subscriptions", "notification_events", "delivery_attempts");
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                        SELECT count(*) FROM information_schema.columns
+                        WHERE table_name = 'subscriptions' AND column_name = 'signing_secret'
+                        """,
+                Integer.class)).isEqualTo(1);
     }
 
 }

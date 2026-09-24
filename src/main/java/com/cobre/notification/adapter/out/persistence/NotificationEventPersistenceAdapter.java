@@ -161,7 +161,10 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                                            LIMIT :limit
                                            FOR UPDATE SKIP LOCKED)
                             RETURNING n.id, n.event_id, n.client_id, n.event_type, n.content, n.event_created_at,
-                                      n.webhook_url, n.attempt_count, n.cycle_attempt_count, n.replay_count
+                                      n.webhook_url, n.attempt_count, n.cycle_attempt_count, n.replay_count,
+                                      (SELECT s.signing_secret FROM subscriptions s
+                                       WHERE s.client_id = n.client_id AND s.event_type = n.event_type AND s.active
+                                       LIMIT 1) AS signing_secret
                             """)
                     .param("workerId", request.workerId())
                     .param("lockedUntil", toTimestamp(request.lockedUntil()))
@@ -348,17 +351,18 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                 rs.getString("event_type"),
                 rs.getString("content"),
                 toInstant(rs.getTimestamp("event_created_at")),
-                rs.getString("webhook_url"));
+                rs.getString("webhook_url"),
+                rs.getString("signing_secret"));
     }
 
     private record ClaimedRow(UUID id, int attemptCount, int cycleAttemptCount, int replayCount, String eventId,
                               String clientId, String eventType, String content, Instant eventCreatedAt,
-                              String webhookUrl) {
+                              String webhookUrl, String signingSecret) {
 
         DeliveryTask toTask(UUID attemptId, Instant claimedAt) {
             return new DeliveryTask(id, attemptId, attemptCount, cycleAttemptCount,
                     AttemptTrigger.of(cycleAttemptCount, replayCount), eventId, clientId, eventType, content,
-                    eventCreatedAt, webhookUrl, claimedAt);
+                    eventCreatedAt, webhookUrl, claimedAt, signingSecret);
         }
 
         @Override
