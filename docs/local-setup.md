@@ -42,9 +42,14 @@ Comma-separated hosts are accepted: `WEBHOOK_SSRF_ALLOWED_HOSTS=a.example,b.exam
 |---|---|---|
 | `WEBHOOK_URL` | `app.demo.webhook-url` | `http://webhook-mock:8080/webhook/ok` |
 | `WEBHOOK_SIGNING_SECRET` | `app.demo.signing-secret` | empty (no HMAC headers) |
-| `WEBHOOK_SSRF_ALLOWED_HOSTS` | `app.webhook.ssrf.extra-allowed-hosts` | empty |
+| `WEBHOOK_SSRF_ALLOWED_HOSTS` | `app.webhook.ssrf.extra-allowed-hosts` | `webhook-mock,localhost` (merged with the demo allowlist) |
 | `WEBHOOK_FLAKY_URL` | one CLIENT002 subscription | WireMock `/webhook/flaky` |
 | `WEBHOOK_FAILING_URL` | one CLIENT003 subscription | WireMock `/webhook/error` |
+| `APP_DELIVERY_WORKER_POLL_INTERVAL` | `app.delivery.worker.poll-interval` | `500ms` (`fixedDelay` between ticks) |
+| `APP_DELIVERY_WORKER_MAX_CONCURRENCY` | `app.delivery.worker.max-concurrency` | `20` |
+| `APP_DELIVERY_RETRY_MAX_ATTEMPTS` | `app.delivery.retry.max-attempts` | `5` (per cycle; replay resets the budget) |
+| `APP_DELIVERY_RETRY_BASE_DELAY` | `app.delivery.retry.base-delay` | `2s` (demo; `application.yml` default is `5s`) |
+| `APP_DELIVERY_RETRY_MAX_DELAY` | `app.delivery.retry.max-delay` | `30s` (demo; `application.yml` default is `10m`) |
 | `CLIENT001_API_KEY` / `CLIENT002_API_KEY` / `CLIENT003_API_KEY` / `OPS_API_KEY` | named API keys | `dev-client-001`, …, `dev-ops` |
 
 Header: `X-API-Key`.

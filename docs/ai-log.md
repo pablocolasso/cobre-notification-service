@@ -815,3 +815,123 @@ already covered by `OpenApiSmokeTest` (not re-run as a suite in this phase; no t
 
 Docs on `develop` (no push): `0c9bca0`, `81e4649`, `f7647ce`, `ee5d16a`, `5e2eeea`, `f1335a2`, plus this entry.
 
+---
+
+## Entry 11 - Compose env for delivery config
+
+**Date:** 2026-09-24
+**Type:** configuration, documentation, verification
+
+### Goal
+
+Expose existing `app.delivery.*` properties as environment variables on the compose `app`
+service so poll interval, concurrency and retry budget can be changed without rebuilding.
+Document them. Confirm Spring relaxed binding from `APP_DELIVERY_*`.
+
+### Prompt (summary)
+
+"Wire delivery properties as env vars in compose. Verify Spring reads them. Update
+local-setup. One commit, no push, no logic or test changes."
+
+### Relevant AI output
+
+Names match `@ConfigurationProperties("app.delivery")`:
+
+| Env | Property |
+|---|---|
+| `APP_DELIVERY_WORKER_POLL_INTERVAL` | `app.delivery.worker.poll-interval` |
+| `APP_DELIVERY_WORKER_MAX_CONCURRENCY` | `app.delivery.worker.max-concurrency` |
+| `APP_DELIVERY_RETRY_MAX_ATTEMPTS` | `app.delivery.retry.max-attempts` |
+| `APP_DELIVERY_RETRY_BASE_DELAY` | `app.delivery.retry.base-delay` |
+| `APP_DELIVERY_RETRY_MAX_DELAY` | `app.delivery.retry.max-delay` |
+
+Compose defaults keep the demo backoff (`2s` / `30s`) and 5 attempts / 500 ms / 20 concurrency.
+`WEBHOOK_SSRF_ALLOWED_HOSTS` default is now `webhook-mock,localhost` (still merged with the
+demo allowlist).
+
+**Verified:** `Binder.get(StandardEnvironment).bind("app.delivery", DeliveryProperties.class)`
+with those env vars set to `750ms` / `3` / `9` / `2s` / `45s` produced exactly those values
+(`pollInterval=PT0.75S`, `maxConcurrency=3`, `maxAttempts=9`). `docker compose config`
+interpolates the same host env into the `app` service.
+
+### Deviations
+
+None. No business logic or tests changed.
+
+### Not verified
+
+- Restart of a live compose `app` container with a non-default `APP_DELIVERY_*` in this session.
+
+### Human analysis
+
+*(pending review)*
+
+### Decision
+
+- Ship the compose env wiring before the final push.
+
+### Resulting change
+
+Commit `chore: expose delivery config as env vars in compose` on `develop` (no push).
+
+
+---
+
+## Entry 11 - Compose env for delivery config
+
+**Date:** 2026-09-24
+**Type:** configuration, documentation, verification
+
+### Goal
+
+Expose existing `app.delivery.*` properties as environment variables on the compose `app`
+service so poll interval, concurrency and retry budget can be changed without rebuilding.
+Document them. Confirm Spring relaxed binding from `APP_DELIVERY_*`.
+
+### Prompt (summary)
+
+"Wire delivery properties as env vars in compose. Verify Spring reads them. Update
+local-setup. One commit, no push, no logic or test changes."
+
+### Relevant AI output
+
+Names match `@ConfigurationProperties("app.delivery")`:
+
+| Env | Property |
+|---|---|
+| `APP_DELIVERY_WORKER_POLL_INTERVAL` | `app.delivery.worker.poll-interval` |
+| `APP_DELIVERY_WORKER_MAX_CONCURRENCY` | `app.delivery.worker.max-concurrency` |
+| `APP_DELIVERY_RETRY_MAX_ATTEMPTS` | `app.delivery.retry.max-attempts` |
+| `APP_DELIVERY_RETRY_BASE_DELAY` | `app.delivery.retry.base-delay` |
+| `APP_DELIVERY_RETRY_MAX_DELAY` | `app.delivery.retry.max-delay` |
+
+Compose defaults keep the demo backoff (`2s` / `30s`) and 5 attempts / 500 ms / 20 concurrency.
+`WEBHOOK_SSRF_ALLOWED_HOSTS` default is now `webhook-mock,localhost` (still merged with the
+demo allowlist).
+
+**Verified:** `Binder.get(StandardEnvironment).bind("app.delivery", DeliveryProperties.class)`
+with those env vars set to `750ms` / `3` / `9` / `2s` / `45s` produced exactly those values
+(`pollInterval=PT0.75S`, `maxConcurrency=3`, `maxAttempts=9`). `docker compose config`
+interpolates the same host env into the `app` service.
+
+### Deviations
+
+None. No business logic or tests changed.
+
+### Not verified
+
+- Restart of a live compose `app` container with a non-default `APP_DELIVERY_*` in this session.
+
+### Human analysis
+
+*(pending review)*
+
+### Decision
+
+- Ship the compose env wiring before the final push.
+
+### Resulting change
+
+Commit `chore: expose delivery config as env vars in compose` on `develop` (no push).
+
+
