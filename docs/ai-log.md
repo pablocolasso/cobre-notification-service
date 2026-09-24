@@ -613,7 +613,7 @@ Time per sub-step (agent wall clock; human review not included):
 | SSRF guard | `0b14170` | ~20 min |
 | HMAC signer | `2d55aba` | ~15 min |
 | HTTP/1.1 | — | already in Phase 2; confirmed, no extra commit |
-| Docs + ai-log | *(this commit)* | ~10 min |
+| Docs + ai-log | `112367e` | ~10 min |
 
 Implementation was written as one pass and split into commits at the end.
 
@@ -661,4 +661,4 @@ Implementation was written as one pass and split into commits at the end.
 
 ### Resulting change
 
-Commits on `develop` (no push). `docs/security.md` records SSRF, HMAC and the TOCTOU limit.
+Commits `d5e4f9b`, `0b14170`, `2d55aba`, `112367e` on `develop` (no push). `docs/security.md` records SSRF, HMAC and the TOCTOU limit.
