@@ -498,3 +498,79 @@ Reviewed the Phase 2 report, the deviations and the items not verified. No chang
 
 Commits `2f78eca`, `32a06f0`, `d49b30a`, `5d06077`, `968a945`, `ec95e6d` on `develop` (no push). ADR-003 gains
 the claim, fencing, lease recovery and retry sections (Accepted after review).
+
+---
+
+## Entry 7 - Phase 3 API, auth, replay and fixture seed
+
+**Date:** 2026-09-24
+**Type:** code generation, test generation, verification
+
+### Goal
+
+Authenticated self-service API: named API keys, tenant scoping, list filters and pagination, detail,
+conditional replay, operator audit, ProblemDetail, fixture seed of `notification_events.json`, OpenAPI.
+
+### Prompt (summary)
+
+"Execute Phase 3 from plan-v2. Do not start Phases 4–6. Challenge.md owns the three resources; the plan
+owns auth, scoping, replay and seed. Own filter (no Spring Security). Named keys CLIENT|OPERATOR. Tenant
+from Requester; client_id ignored for clients; 404 cross-tenant. App Clock; IdGenerator; cycle budget
+reset on replay. Scope: auth on existing GETs; list/detail contract; replay only from FAILED; AuditLog
+for operator; ProblemDetail 400/401/404/409/500/503; DemoDataSeeder; springdoc; ADR-006 and ADR-007
+Proposed; A13 note. Tests: replay rules, BOLA, 401, 409, filters, audit, concurrent replay, seeder.
+Commit per sub-step, no push, no Phase 4."
+
+### Relevant AI output
+
+Time per sub-step (agent wall clock; human review not included):
+
+| Sub-step | Commit | Time |
+|---|---|---|
+| 1. Auth filter, named keys, 401 | (this batch) | 14:03 - 14:13 (~10 min, implemented with the rest) |
+| 2. Scoping, filters, replay, audit, ProblemDetail | (this batch) | same window |
+| 3. Tests (unit, web, concurrent replay) | (this batch) | same window |
+| 4. Fixture seeder + compose keys | (this batch) | same window |
+| 5. OpenAPI, ADR-006/007, A13, ai-log | (this batch) | same window |
+
+The implementation was written as one pass and split into commits at the end.
+
+- **Auth:** `ApiKeyAuthenticationFilter` on `/notification_events` and `/notification_events/*`.
+  Constant-time compare of all configured keys. Same 401 `unauthorized` body when the header is
+  missing or wrong. Actuator (management port) and springdoc stay outside the filter.
+- **Requester:** `Client(keyName, clientId)` / `Operator(keyName)`. Tenant predicates live in
+  `TenantScope` and in SQL (`findByIdAndClientId`, scoped `requestReplay`). A Client `client_id`
+  query parameter is ignored.
+- **Replay:** domain `NotificationEvent.replay`; application checks 404 → 409 `not_replayable` →
+  409 `subscription_inactive` → conditional `UPDATE ... FAILED`. `cycle_attempt_count = 0`,
+  `replay_count + 1`, `attempt_count` unchanged, `next_attempt_at` and `updated_at` from the app
+  `Clock`. The next claim creates attempt #2 with trigger `REPLAY`.
+- **Audit:** logger `audit`, only for Operator, including `not_found` / `not_replayable` /
+  `subscription_inactive`. No `content`, no raw key.
+- **Seeder:** classpath copy of `notification_events.json`; origin `FIXTURE`; one
+  `fixture_synthetic` attempt per row; idempotent by `event_id`.
+- **Tests:** 203 green, including Phase 2 delivery scenarios.
+- **Deviations:**
+  - `@ExceptionHandler(ConstraintViolationException)` so `@Min`/`@Max` on query params become 400
+    (`invalid_request`) instead of 500. Extra codes `invalid_request`, `internal_error`,
+    `service_unavailable` besides the four required ones.
+  - Operator `requestReplay` uses a separate SQL statement when `clientId` is null. PostgreSQL
+    cannot infer the type of `:clientId IS NULL`.
+  - Fixture JSON is also under `src/main/resources/demo/` so the running jar can read it.
+  - Correlation id is taken from `X-Request-Id` or generated; it is not yet in MDC (Phase 5).
+- **Not verified:**
+  - Compose demo with CLIENT001 listing the fixture and operator replay of EVT003 against a
+    rebuilt `app` image (covered by `DemoDataSeederTest` and the web tests instead).
+  - A real database outage producing API 503 (handler is wired; no live PG-down test).
+
+### Human analysis
+
+Pending review
+
+### Decision
+
+Pending review
+
+### Resulting change
+
+Phase 3 commits on `develop` (no push). ADR-006 and ADR-007 Proposed. `docs/assumptions.md` records A13.
