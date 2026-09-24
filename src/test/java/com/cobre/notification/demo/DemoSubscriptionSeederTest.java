@@ -19,20 +19,20 @@ class DemoSubscriptionSeederTest {
 
     @Test
     void upsertsEverySubscriptionUsingTheDefaultUrlUnlessOverridden() {
-        var properties = new DemoProperties("https://default.example/hook", List.of(
+        var properties = new DemoProperties("https://default.example/hook", "shared-secret", List.of(
                 new DemoSubscription("CLIENT001", "credit_card_payment", null, null),
                 new DemoSubscription("CLIENT003", "credit_cashback", "https://failing.example/hook", "s3cret")));
 
         new DemoSubscriptionSeeder(properties, subscriptions, UUID::randomUUID).run(null);
 
         assertThat(subscriptions.upserts).containsExactly(
-                "CLIENT001|credit_card_payment|https://default.example/hook|null",
+                "CLIENT001|credit_card_payment|https://default.example/hook|shared-secret",
                 "CLIENT003|credit_cashback|https://failing.example/hook|s3cret");
     }
 
     @Test
     void failsFastWhenNoUrlIsConfigured() {
-        var properties = new DemoProperties(" ", List.of(new DemoSubscription("CLIENT001", "credit_card_payment", null, null)));
+        var properties = new DemoProperties(" ", null, List.of(new DemoSubscription("CLIENT001", "credit_card_payment", null, null)));
 
         assertThatThrownBy(() -> new DemoSubscriptionSeeder(properties, subscriptions, UUID::randomUUID).run(null))
                 .isInstanceOf(IllegalStateException.class)

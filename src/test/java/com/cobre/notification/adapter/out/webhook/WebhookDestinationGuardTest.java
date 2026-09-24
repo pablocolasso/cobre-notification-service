@@ -5,12 +5,14 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.cobre.notification.adapter.out.webhook.WebhookDestinationGuard.Decision;
+import com.cobre.notification.config.WebhookProperties;
 import com.cobre.notification.config.WebhookProperties.Ssrf;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -66,8 +68,8 @@ class WebhookDestinationGuardTest {
 
     @Test
     void allowlistedHostSkipsDnsAndIpChecks() {
-        WebhookDestinationGuard guard = new WebhookDestinationGuard(
-                new Ssrf(true, List.of("webhook-mock", "Webhook-Mock"), List.of()),
+        WebhookDestinationGuard guard = guard(
+                new Ssrf(true, List.of("webhook-mock", "Webhook-Mock"), List.of(), List.of()),
                 host -> {
                     throw new UnknownHostException(host);
                 });
@@ -84,8 +86,7 @@ class WebhookDestinationGuardTest {
         appender.start();
         logger.addAppender(appender);
         try {
-            WebhookDestinationGuard guard = new WebhookDestinationGuard(
-                    new Ssrf(false, List.of(), List.of()), unusedResolver());
+            WebhookDestinationGuard guard = guard(new Ssrf(false, List.of(), List.of(), List.of()), unusedResolver());
 
             assertThat(guard.evaluate("http://localhost:8089/webhook/ok")).isInstanceOf(Decision.Allow.class);
             assertThat(guard.evaluate("https://127.0.0.1/hook")).isInstanceOf(Decision.Allow.class);
@@ -106,8 +107,7 @@ class WebhookDestinationGuardTest {
         WebhookDestinationGuard guard = strict(address("hooks.example.com", 8, 8, 8, 8));
         assertRejected(guard, "https://hooks.example.com:80/hook", "port_not_allowed");
 
-        WebhookDestinationGuard extra = new WebhookDestinationGuard(
-                new Ssrf(true, List.of(), List.of(80)),
+        WebhookDestinationGuard extra = guard(new Ssrf(true, List.of(), List.of(80), List.of()),
                 host -> new InetAddress[] {address("hooks.example.com", 8, 8, 8, 8)});
         assertThat(extra.evaluate("https://hooks.example.com:80/hook")).isInstanceOf(Decision.Allow.class);
     }
@@ -116,11 +116,19 @@ class WebhookDestinationGuardTest {
     void rejectsWhenAnyResolvedAddressIsBlocked() throws Exception {
         InetAddress publicIp = address("hooks.example.com", 8, 8, 8, 8);
         InetAddress loopback = address("hooks.example.com", 127, 0, 0, 1);
-        WebhookDestinationGuard guard = new WebhookDestinationGuard(
-                new Ssrf(true, List.of(), List.of()),
+        WebhookDestinationGuard guard = guard(new Ssrf(true, List.of(), List.of(), List.of()),
                 host -> new InetAddress[] {publicIp, loopback});
 
         assertRejected(guard, "https://hooks.example.com/hook", "blocked_address");
+    }
+
+    @Test
+    void extraAllowedHostsAreMergedIntoTheAllowlist() {
+        WebhookDestinationGuard guard = guard(
+                new Ssrf(true, List.of("webhook-mock"), List.of(), List.of("host-del-dia")),
+                unusedResolver());
+
+        assertThat(guard.evaluate("http://host-del-dia/hook")).isInstanceOf(Decision.Allow.class);
     }
 
     private static WebhookDestinationGuard strict(InetAddress address) {
@@ -128,7 +136,12 @@ class WebhookDestinationGuardTest {
     }
 
     private static WebhookDestinationGuard strict(WebhookDestinationGuard.NameResolver resolver) {
-        return new WebhookDestinationGuard(new Ssrf(true, List.of(), List.of()), resolver);
+        return guard(new Ssrf(true, List.of(), List.of(), List.of()), resolver);
+    }
+
+    private static WebhookDestinationGuard guard(Ssrf ssrf, WebhookDestinationGuard.NameResolver resolver) {
+        return new WebhookDestinationGuard(new WebhookProperties(Duration.ofSeconds(2), Duration.ofSeconds(5), ssrf),
+                resolver);
     }
 
     private static WebhookDestinationGuard.NameResolver unusedResolver() {

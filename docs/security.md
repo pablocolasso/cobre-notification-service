@@ -21,7 +21,9 @@ A rejected URL becomes `DeliveryResult.InvalidDestination` → `FAILED` with
 (Phase 1/2) so a 3xx cannot bounce into an internal address.
 
 The presentation webhook is expected to be public `https`. Setting
-`WEBHOOK_URL=https://… docker compose up app` does **not** need an allowlist entry.
+`WEBHOOK_URL=https://… docker compose up app` does **not** need an allowlist entry. If the resolver
+returns a blocked address, add the host with `WEBHOOK_SSRF_ALLOWED_HOSTS` (merged, not replaced).
+See [local-setup.md](local-setup.md).
 
 ### Known limitation: DNS rebinding (TOCTOU)
 
@@ -50,8 +52,8 @@ secret is null and the request is unsigned.
 The secret is never written to logs, metrics, `last_error`, or `toString` of `Subscription`,
 `DeliveryTask` or the claim row.
 
-Demo seed: add `signing-secret` under `app.demo.subscriptions[]` when the presentation endpoint
-expects a signature.
+Demo seed: `WEBHOOK_SIGNING_SECRET` sets `app.demo.signing-secret` for every subscription that does
+not override it. A per-row `signing-secret` under `app.demo.subscriptions[]` still wins.
 
 ## HTTP/1.1
 

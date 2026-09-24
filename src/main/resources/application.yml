@@ -77,3 +77,4 @@ app:
     ssrf:
       strict: true
       allowed-hosts: []
+      extra-allowed-hosts: ${WEBHOOK_SSRF_ALLOWED_HOSTS:}

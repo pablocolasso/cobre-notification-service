@@ -12,6 +12,7 @@ app:
       max-delay: 30s
   demo:
     webhook-url: ${WEBHOOK_URL:http://localhost:8089/webhook/ok}
+    signing-secret: ${WEBHOOK_SIGNING_SECRET:}
     # The (client_id, event_type) pairs of notification_events.json. One pair points at a flaky endpoint
     # (500, 500, then 200) and one at a failing endpoint so the demo shows retries and both terminal states.
     subscriptions:

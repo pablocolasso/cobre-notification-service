@@ -4,7 +4,6 @@ import com.cobre.notification.config.WebhookProperties;
 import com.cobre.notification.config.WebhookProperties.Ssrf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.net.Inet4Address;
@@ -46,13 +45,8 @@ public class WebhookDestinationGuard {
     private final NameResolver resolver;
     private final Set<String> allowedHosts;
 
-    @Autowired
-    public WebhookDestinationGuard(WebhookProperties properties) {
-        this(properties.ssrf(), InetAddress::getAllByName);
-    }
-
-    WebhookDestinationGuard(Ssrf ssrf, NameResolver resolver) {
-        this.ssrf = ssrf;
+    public WebhookDestinationGuard(WebhookProperties properties, NameResolver resolver) {
+        this.ssrf = properties.ssrf();
         this.resolver = resolver;
         this.allowedHosts = ssrf.allowedHosts().stream()
                 .map(host -> host.toLowerCase(Locale.ROOT))

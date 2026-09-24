@@ -44,7 +44,7 @@ class DemoSubscriptionSeeder implements ApplicationRunner {
                         + subscription.clientId() + "/" + subscription.eventType());
             }
             subscriptions.upsertActive(ids.newId(), subscription.clientId(), subscription.eventType(), webhookUrl,
-                    subscription.signingSecret());
+                    firstNonBlank(subscription.signingSecret(), properties.signingSecret()));
             log.atInfo()
                     .setMessage("Demo subscription upserted")
                     .addKeyValue("client_id", subscription.clientId())
@@ -52,5 +52,14 @@ class DemoSubscriptionSeeder implements ApplicationRunner {
                     .addKeyValue("webhook_host", URI.create(webhookUrl).getHost())
                     .log();
         }
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }

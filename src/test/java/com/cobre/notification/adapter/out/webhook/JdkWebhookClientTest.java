@@ -143,7 +143,7 @@ class JdkWebhookClientTest {
     void blockedUrlDoesNotIssueHttp() {
         int receivedBefore = server.received().size();
         WebhookProperties emptyAllowlist = new WebhookProperties(Duration.ofSeconds(1), Duration.ofMillis(500),
-                new Ssrf(true, List.of(), List.of()));
+                new Ssrf(true, List.of(), List.of(), List.of()));
 
         try (JdkWebhookClient blocked = newClient(emptyAllowlist)) {
             DeliveryResult result = blocked.deliver(task(server.url("/ok")));
@@ -185,13 +185,14 @@ class JdkWebhookClientTest {
     }
 
     private JdkWebhookClient newClient(WebhookProperties properties) {
-        return new JdkWebhookClient(properties, jsonMapper, new WebhookDestinationGuard(properties),
+        return new JdkWebhookClient(properties, jsonMapper,
+                new WebhookDestinationGuard(properties, java.net.InetAddress::getAllByName),
                 new WebhookSigner(), CLOCK);
     }
 
     private static WebhookProperties allowlisted() {
         return new WebhookProperties(Duration.ofSeconds(1), Duration.ofMillis(500),
-                new Ssrf(true, List.of("localhost", "127.0.0.1"), List.of()));
+                new Ssrf(true, List.of("localhost", "127.0.0.1"), List.of(), List.of()));
     }
 
     private static DeliveryTask task(String url) {

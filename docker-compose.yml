@@ -88,6 +88,8 @@ services:
       WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-mock:8080/webhook/ok}
       WEBHOOK_FLAKY_URL: ${WEBHOOK_FLAKY_URL:-http://webhook-mock:8080/webhook/flaky}
       WEBHOOK_FAILING_URL: ${WEBHOOK_FAILING_URL:-http://webhook-mock:8080/webhook/error}
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:-}
+      WEBHOOK_SSRF_ALLOWED_HOSTS: ${WEBHOOK_SSRF_ALLOWED_HOSTS:-}
       CLIENT001_API_KEY: ${CLIENT001_API_KEY:-dev-client-001}
       CLIENT002_API_KEY: ${CLIENT002_API_KEY:-dev-client-002}
       CLIENT003_API_KEY: ${CLIENT003_API_KEY:-dev-client-003}

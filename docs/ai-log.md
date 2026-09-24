@@ -640,10 +640,6 @@ Implementation was written as one pass and split into commits at the end.
   host-run demo against `localhost:8089` still works under `strict=true`.
 - Signing secret comes from the current subscription at claim, not from a snapshot on
   `notification_events` (simplest; documented in `docs/security.md`).
-- `@Autowired` on `WebhookDestinationGuard`'s Spring constructor: a second package-private
-  constructor (injectable `NameResolver` for tests) would otherwise make Spring look for a
-  no-arg ctor.
-
 ### Not verified
 
 - Live compose with a real public presentation URL (strict path is unit-tested with a public
@@ -653,12 +649,37 @@ Implementation was written as one pass and split into commits at the end.
 
 ### Human analysis
 
-*(pending review)*
+Reviewed. No critical bug. Presentation-day flow is:
+
+```
+WEBHOOK_URL=https://url-real-del-dia \
+WEBHOOK_SIGNING_SECRET=secreto-si-lo-piden \
+docker compose up app
+```
+
+If the host is in a blocked range (unlikely for a public URL; possible on a corporate resolver):
+
+```
+WEBHOOK_SSRF_ALLOWED_HOSTS=host-del-dia docker compose up app
+```
+
+Those env vars were not wired or documented (`docs/local-setup.md` / README did not exist yet).
+
+`@Autowired` plus a second constructor on `WebhookDestinationGuard` means the DNS resolver was not a
+first-class dependency. One constructor is cleaner: inject `NameResolver` as a bean (production:
+`InetAddress::getAllByName`). Unit tests pass a fake into the same constructor. A test-only `@Bean`
+is unnecessary.
 
 ### Decision
 
+- Accept Phase 4.
+- Wire `WEBHOOK_SIGNING_SECRET` and `WEBHOOK_SSRF_ALLOWED_HOSTS` (extra hosts are merged into the
+  profile allowlist, not replaced). Document them in `docs/local-setup.md`.
+- Collapse `WebhookDestinationGuard` to a single constructor; register `NameResolver` as a
+  production bean.
 - Do not start Phase 5 until it is explicitly requested.
 
 ### Resulting change
 
-Commits `d5e4f9b`, `0b14170`, `2d55aba`, `112367e` on `develop` (no push). `docs/security.md` records SSRF, HMAC and the TOCTOU limit.
+Commits `d5e4f9b`, `0b14170`, `2d55aba`, `112367e`, `dcba0ea` on `develop` (no push), plus the
+follow-up review commit. `docs/security.md` records SSRF, HMAC and the TOCTOU limit.
