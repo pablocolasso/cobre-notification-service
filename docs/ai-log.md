@@ -582,3 +582,83 @@ Reviewed. No critical bug.
 
 Commits `9189e57`, `804dc0d`, `e0c51b5`, `9c02880` on `develop` (no push). ADR-006 and ADR-007 Proposed.
 `docs/assumptions.md` records A13. Blank `client_id` for Operator is normalized to no filter.
+
+---
+
+## Entry 8 - Phase 4 outbound security (SSRF, HMAC, HTTP/1.1)
+
+**Date:** 2026-09-24
+**Type:** code generation, test generation, verification
+
+### Goal
+
+Protect outbound webhooks: SSRF guard before HTTP, optional HMAC-SHA256, confirm HTTP/1.1 and
+no redirects. Keep `WEBHOOK_URL=https://… docker compose up app` working for the presentation.
+Do not start Phase 5.
+
+### Prompt (summary)
+
+"Execute Phase 4 from plan-v2. Source of truth: the challenge PDF. Show the file list first.
+WebhookDestinationGuard (strict https + DNS/IP denylist, permissive parse-only + WARN, allowlist
+bypass). HMAC if `signing_secret` is set: `X-Cobre-Timestamp` + `X-Cobre-Signature: v1=`. Flyway
+V2. Commits per sub-step, no push. Document DNS rebinding TOCTOU; do not implement pinning."
+
+### Relevant AI output
+
+Time per sub-step (agent wall clock; human review not included):
+
+| Sub-step | Commit | Time |
+|---|---|---|
+| Flyway V2 + persist plumbing | `d5e4f9b` | ~10 min |
+| SSRF guard | `0b14170` | ~20 min |
+| HMAC signer | `2d55aba` | ~15 min |
+| HTTP/1.1 | — | already in Phase 2; confirmed, no extra commit |
+| Docs + ai-log | *(this commit)* | ~10 min |
+
+Implementation was written as one pass and split into commits at the end.
+
+- **SSRF:** `WebhookDestinationGuard` in `adapter/out/webhook`. Strict default: https, port 443 or
+  `> 1023` (plus `extra-allowed-ports`), resolve and reject loopback / link-local / RFC 1918 /
+  any-local / multicast / CGNAT / IPv6 ULA. Any blocked address in the resolution list rejects.
+  Allowlisted hosts skip DNS and the https-only rule; scheme must still be http(s). Permissive
+  mode logs WARN with scheme+host only. Failure is `DeliveryResult.InvalidDestination` → FAILED
+  `invalid_destination`, no HTTP.
+- **Allowlist:** production empty. `local`/`demo`: `webhook-mock`, `localhost`, `127.0.0.1`.
+  `test`: `localhost`, `127.0.0.1` (RecordingWebhookServer).
+- **HMAC:** `subscriptions.signing_secret` nullable. Secret is read from the **active**
+  subscription at claim time (JOIN in `RETURNING`), not snapshotted on `notification_events`.
+  Missing secret → no signature headers. Secret never in logs, `toString`, or errors.
+- **HTTP/1.1:** unchanged from Phase 2 (`Version.HTTP_1_1`, `Redirect.NEVER`, no `Upgrade`).
+- **Tests:** 223 green, including Phase 2/3. Guard unit cases (loopback, private, link-local,
+  169.254.169.254, ULA, http-strict, public https, allowlist, permissive WARN). Signer digest and
+  no-secret. Adapter: blocked URL issues no HTTP; allowlist delivers; redirect still not followed.
+  Context test asserts Flyway v2 and the `signing_secret` column. `ddl-auto=validate` passes.
+
+### Deviations
+
+- Local/demo allowlist includes `localhost` and `127.0.0.1` in addition to `webhook-mock`, so a
+  host-run demo against `localhost:8089` still works under `strict=true`.
+- Signing secret comes from the current subscription at claim, not from a snapshot on
+  `notification_events` (simplest; documented in `docs/security.md`).
+- `@Autowired` on `WebhookDestinationGuard`'s Spring constructor: a second package-private
+  constructor (injectable `NameResolver` for tests) would otherwise make Spring look for a
+  no-arg ctor.
+
+### Not verified
+
+- Live compose with a real public presentation URL (strict path is unit-tested with a public
+  resolver answer; no real external host).
+- DNS rebinding / TOCTOU (documented limit, not implemented).
+- HMAC against a receiver that verifies the signature (digest is checked in unit/adapter tests).
+
+### Human analysis
+
+*(pending review)*
+
+### Decision
+
+- Do not start Phase 5 until it is explicitly requested.
+
+### Resulting change
+
+Commits on `develop` (no push). `docs/security.md` records SSRF, HMAC and the TOCTOU limit.

@@ -24,6 +24,9 @@ operators and is a BOLA foot-gun if a client can switch tenants by sending one.
   `subscription_inactive` — emits an `audit` log line (`audit_event=operator_action`). Clients do
   not.
 
+Outbound webhook SSRF, HMAC and the DNS-rebinding TOCTOU limit are documented in
+[docs/security.md](../security.md).
+
 ## Consequences
 
 - Demo and local profiles can ship named keys with env defaults; other profiles have no keys unless
