@@ -232,34 +232,44 @@ Time per sub-step (agent wall clock, from commit timestamps; human review not in
 
 ### Human analysis
 
-Pending review
+Reviewed the Phase 1 report and the deviations the agent flagged.
+
+- **Scope:** the result matches what I asked for. The consumer never does HTTP, all delivery goes through the worker's single claim path, and the retry classification, SSRF guard, auth, HMAC and metrics were left out on purpose. Several gaps that a reviewer could flag (no RETRYING, no SSRF checks, only `INITIAL` as `attempt_trigger`) are planned scope for later phases, not defects.
+- **Deviations:** splitting the persistence port into `NotificationEventRepository` and `DeliveryRepository` is a reasonable interface segregation. Pulling the minimal `DeliveryError` sanitizing forward is consistent with the data-safety rule. Using the app `Clock` instead of the DB `now()` is a trade-off I accept for testability, at the cost of assuming NTP-synced nodes (documented in ADR-003).
+- **Known gaps I noted:** invalid messages are skipped without a DLT, the worker is sequential, `client_id` on the list endpoint is an unauthenticated filter, and SLF4J key-values are not rendered by the default console pattern. Not verified: `publish-events.sh` (no sh available on the agent machine) and multiple real workers competing for rows.
+- **Demo:** the compose run showed the expected outcomes (duplicate deduplicated, unsubscribed type ignored, 9 COMPLETED and 1 FAILED), and `content` did not appear in logs.
 
 ### Decision
 
-Pending review
+- Accept Phase 1 as the base for Phase 2. No code corrections requested.
+- Keep the deviations above. Update the plan and ADRs to reflect the repository split.
+- Schedule the known gaps in Phase 2 (DLT, retries, bounded executor, key-value logging) and Phase 3 (auth). Entry 5 records the follow-up review that added concurrency tests and stale-result fencing.
+- Force HTTP/1.1 in the `HttpClient` (moved forward from Phase 4), since the receiver on demo day is unknown.
+- Verify `publish-events.sh` myself before delivery.
 
 ### Resulting change
 
 Four commits (`ab136fe`, `60a8eee`, `b15235e`, `2d51099`) on top of `chore: phase 0 setup`. Manual demo on
 docker compose: 12 published events -> 10 notifications (duplicate deduplicated, unsubscribed type ignored),
 9 COMPLETED and 1 FAILED with `last_error = "http_status: HTTP 500"`; webhook received the expected headers and
-snake_case body; `content` absent from application logs.
+snake_case body; `content` absent from application logs. No corrections applied after review; open items carried
+into Phase 2 (see Entry 5).
 
 ---
 
-## Entry 5 - Pre-Phase 3 review: clock source, invalid messages, worker concurrency
+## Entry 5 - Pre-Phase 2 review: clock source, invalid messages, worker concurrency
 
 **Date:** 2026-09-24
 **Type:** code review (no code changes)
 
 ### Goal
 
-Speed up the human review before Phase 3 by answering three questions with concrete file and test references,
+Speed up the human review before Phase 2 by answering three questions with concrete file and test references,
 and by listing anything that should be fixed, without changing code.
 
 ### Prompt (summary)
 
-"Before Phase 3 I will review Phases 1 and 2. Do not advance. (1) Clock: show where the app `Clock` and DB `now()`
+"Before starting Phase 2, I will review the Phase 1 code. Do not advance. (1) Clock: show where the app `Clock` and DB `now()`
 are used; confirm the claim and `locked_until` use the same source in every path; flag any mix; if the decision
 stands, write the NTP assumption and the risk in ADR-003. (2) Invalid messages: confirm no path discards a message
 without the DLT or a count; point to the test. (3) Worker concurrency: point to the test running 2+ workers on the
@@ -267,9 +277,7 @@ same rows; if it only tests the query, say what is missing. Reference files and 
 
 ### Relevant AI output
 
-**Premise correction.** Phase 2 is not implemented. The last commit is `df2734b` (Phase 1 ai-log). There is no
-DLT, no lease recovery, no retries, no concurrent-claim test and no ADR folder. The answers below describe the
-Phase 1 code as it is.
+**Premise correction.** Phase 2 is not implemented yet, so this review covers the Phase 1 code only. Most gaps found here (DLT, lease recovery, concurrency tests) are expected at this stage and are scheduled for Phase 2. The `null` and `\u0000` cases were not in the plan and are new findings.
 
 **1. Clock.**
 - The app `Clock` is the only source in application paths:
@@ -343,14 +351,150 @@ Phase 1 code as it is.
 
 ### Human analysis
 
-Pending review
+Reviewed the Phase 1 findings against the code and the plan.
+
+- **Clock:** consistent within a node. The claim cutoff and `locked_until` come from the same `Instant`, and the app never mixes it with the DB `now()`. Cross-node skew only becomes a real risk once lease recovery exists, so it belongs to Phase 2. I keep the app `Clock` because it is injectable and makes retry and lease tests deterministic. The cost is the NTP assumption, which I accept and document.
+- **Invalid messages:** the most useful finding of the review. Today they are skipped without a DLT and without a count, which is silent data loss. Two inputs are worse: the JSON literal `null` and `content` with `\u0000` would stall a partition indefinitely instead of being dead-lettered. Neither was in the plan.
+- **Concurrency:** the existing claim test runs two claims sequentially on one thread, so it would pass even without `SKIP LOCKED`. It does not prove the property I care about. I need tests with overlapping transactions, a lock-held test, and a service-level test with two workers.
+- **Stale results (F6):** without fencing on the attempt as well as `locked_by`, a slow worker could overwrite the result of a later attempt on the same row. This was not in the plan and I consider it necessary.
+- **Premise correction:** my prompt assumed Phase 2 was done. The agent flagged that it was not and reviewed only Phase 1, which was the right call.
 
 ### Decision
 
-Pending review
+- Keep the app `Clock`. ADR-003 moves from Proposed to Accepted, with the NTP assumption, the skew risk and the DB-clock alternative documented.
+- Accept F1 to F7 and implement them in Phase 2:
+  - F1: DLT with counter and test.
+  - F2: `null` literal and `\u0000` treated as invalid events.
+  - F3: unexpected listener exceptions go to the DLT, no infinite retry.
+  - F4: three concurrency tests.
+  - F5: lease recovery, and fix the misleading log message.
+  - F6: fence on `attempt_count` in addition to `locked_by`.
+  - F7: visible key-values in logs.
+- F8 (monotonic `duration_ms`) only if trivial.
+- Not changing the Phase 1 code before Phase 2 starts.
 
 ### Resulting change
 
 - No code changed.
 - New `docs/adr/ADR-003-durable-postgresql-delivery.md` with the time-source decision, NTP assumption, risks
   and the DB-clock alternative (other sections pending Phase 2).
+
+---
+
+## Entry 6 - Phase 2 lifecycle and retries (F1 to F8)
+
+**Date:** 2026-09-24
+**Type:** code generation, test generation, verification
+
+### Goal
+
+Full delivery lifecycle: retries with backoff, max attempts, lease recovery, fencing on the attempt, bounded
+concurrent delivery, and a real DLT for the Kafka consumer. Includes findings F1 to F8 from Entry 5.
+
+### Prompt (summary)
+
+"Execute Phase 2 including F1-F8. Keep the app `Clock`. F6: the fence also compares `attempt_count`. F8 only if
+trivial. Scope: DLT with `DeadLetterPublishingRecoverer` and a metric (invalid and unexpected -> DLT, transient
+-> backoff without committing, never log payload); HTTP/1.1; visible key-values; virtual threads plus
+`Semaphore(maxConcurrency)`, claim = free permits; lease recovery (RETRYING/FAILED, attempt ABANDONED, fix the
+false log); classifier and RetryPolicy (full jitter, 5s/10m/5, `Retry-After` on 429); INITIAL/RETRY; ids from an
+injectable generator; `.gitattributes` LF. Mandatory tests: classifier, RetryPolicy, transitions, concurrency
+(a)(b)(c), lease + fencing, E2E flaky/429/404/timeout/max attempts, DLT. Commit per sub-step, no push, time per
+sub-step, do not start Phase 3."
+
+### Relevant AI output
+
+Time per sub-step (agent wall clock, from commit timestamps; human review not included):
+
+| Sub-step | Commit | Time |
+|---|---|---|
+| 0. LF normalization | `2f78eca` | 12:06 - 12:07 (~1 min) |
+| 1. Kafka DLT and error policy | `32a06f0` | 12:07 - 12:13 (~6 min) |
+| 2. Domain lifecycle, classifier, retry policy | `d49b30a` | 12:13 - 12:18 (~5 min) |
+| 3. Worker: executor, lease recovery, fencing, E2E | `5d06077` | 12:18 - 12:32 (~14 min) |
+| 4. Concurrency tests | `968a945` | written during sub-step 3, committed separately at 12:32 |
+| 5. Demo and ADR-003 | `ec95e6d` | 12:32 - 12:36 (~4 min) |
+
+- **Kafka (F1, F2, F3):**
+  - `DefaultErrorHandler.defaultFalse()` retries only transient data-access exceptions, with unlimited
+    exponential backoff, without committing the offset.
+  - Every other exception goes to `platform.events.v1.DLT` through `DeadLetterPublishingRecoverer`, and the
+    counter `kafka.dlt.published{reason=invalid_event|unexpected_error}` is incremented.
+  - The exception message and stack trace headers are excluded. They are replaced by
+    `x-cobre-dlt-reason` / `x-cobre-dlt-detail`, which take values from a closed set.
+  - The mapper rejects the JSON literal `null` (`null_message`) and NUL characters
+    (`invalid_characters_<field>`).
+  - pgjdbc `logServerErrorDetail=false`, so PostgreSQL "Failing row contains ..." details (which would include
+    `content`) never reach exception messages.
+- **Logs (F7):** the console pattern renders SLF4J key-values (`%kvp`). Delivery logs include
+  `notification_event_id`, `event_id`, `client_id`, `attempt_number`, `trigger`, `status`, `http_status`,
+  `error_code` and `duration_ms`; `content` never appears.
+- **Domain:**
+  - `DeliveryStatus` validates transitions.
+  - `DeliveryDecision` enforces the schema invariants.
+  - `HttpStatusDeliveryResultClassifier`: 2xx success; 408, 429, 5xx and transport failures retryable; the
+    rest permanent.
+  - `ExponentialBackoffRetryPolicy`: full jitter, cap, `Retry-After` as a lower bound limited by the cap.
+  - `DeliveryLifecycle` covers both results and expired leases.
+  - The budget is per cycle (`cycle_attempt_count`).
+- **Worker (F5, F6, F8):**
+  - `Semaphore` bound plus virtual threads; the claim size equals the free permits.
+  - `RecoverExpiredLeasesService` moves expired `PROCESSING` rows to RETRYING or FAILED and sets the attempt
+    to ABANDONED, all fenced.
+  - `recordResult` is fenced on `locked_by` + `attempt_count`. A lost lease is logged as WARN, not as a false
+    ERROR.
+  - `duration_ms` is measured with `System.nanoTime`.
+  - `IdGenerator` port for all ids.
+  - `HttpClient` pinned to HTTP/1.1.
+- **Tests:** 179 green.
+  - `ConcurrentClaimTest` (a, b): 4 threads with a `Phaser`, 120 rows with batch 7; a held `FOR UPDATE` lock
+    is skipped in < 2s.
+  - `ConcurrentWorkersTest` (c): two full workers, 40 notifications; each `Idempotency-Key` is received
+    once, `attempt_count = 1`, and both workers claimed rows.
+  - Lease and fencing in `NotificationEventPersistenceAdapterTest`.
+  - `DeliveryEndToEndTest`: flaky 500, 500, 200 gives COMPLETED with INITIAL/RETRY/RETRY; 404 fails
+    immediately; 429 respects the 200ms cap between attempts; timeout and 500 give FAILED after 3 attempts
+    with the reason persisted; a crashed worker's lease is recovered and delivered.
+  - `KafkaErrorHandlingIntegrationTest`: invalid events (including `null` and NUL) and unexpected errors go
+    to the DLT, transient errors are retried, and the partition keeps advancing.
+  - The concurrency, E2E and persistence classes were re-run 3 times with no flakiness.
+- **Demo (compose):**
+  - `DEMO-FLAKY-1` went RETRYING -> COMPLETED in 3 attempts (500, 500, 200).
+  - `DEMO-ERROR-1` went to FAILED after 5 attempts in ~19s, with
+    `last_error = "http_status: HTTP 500; retries exhausted after 5 attempts"`.
+  - `GET /notification_events/{id}` shows the 3 attempts.
+  - `content` never appeared in the app logs.
+- **Deviations flagged by the AI:**
+  - Custom DLT headers (`x-cobre-dlt-reason` / `x-cobre-dlt-detail`) instead of Spring's exception headers.
+  - DLT reasons `null_message` and `invalid_characters_<field>`.
+  - `app.delivery` restructured: `batch-size` removed (the claim size follows the free permits), and the
+    worker id moved to `app.delivery.worker.id`.
+  - Attempt ids are pre-generated in `ClaimRequest` by the application `IdGenerator`.
+  - `Retry-After` only supports delay-seconds, not HTTP dates.
+  - The fault-injection wrapper (`FaultInjectingIngestion`) is part of the shared test context. It only
+    triggers on `FAULT-*` event ids.
+  - `logServerErrorDetail=false` (not in the plan).
+  - The attempt budget is per cycle, so a replay starts a new budget.
+  - The demo profile shortens the backoff to 2s / 30s.
+  - `UPDATE ... RETURNING` does not order its rows. A persistence test that assumed an order was fixed to
+    assert the set.
+- **Not verified:**
+  - `Retry-After` in HTTP-date form (not supported).
+  - Cross-node clock skew in lease recovery (documented in ADR-003, not tested).
+  - The DLT against the compose broker: tested only with Testcontainers.
+  - A real outage of the Kafka consumer's database (simulated through fault injection).
+
+### Human analysis
+
+Reviewed the Phase 2 report, the deviations and the items not verified. No changes requested.
+
+### Decision
+
+- Accept Phase 2 as delivered, including the deviations listed above.
+- ADR-003 claim, fencing, lease recovery and retry sections move from Proposed to Accepted.
+- Do not start Phase 3 until it is explicitly requested.
+
+### Resulting change
+
+Commits `2f78eca`, `32a06f0`, `d49b30a`, `5d06077`, `968a945`, `ec95e6d` on `develop` (no push). ADR-003 gains
+the claim, fencing, lease recovery and retry sections (Accepted after review).

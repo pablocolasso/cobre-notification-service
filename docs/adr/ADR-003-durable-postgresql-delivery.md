@@ -1,7 +1,7 @@
 # ADR-003 - Durable PostgreSQL-based delivery and retry
 
-**Status:** Accepted (time source). Claim, fencing, lease recovery and retry sections: Proposed (Phase 2,
-pending human review).
+**Status:** Accepted (time source reviewed in Phase 1; claim, fencing, lease recovery and retry reviewed in
+Phase 2).
 **Date:** 2026-09-24
 
 ## Context
