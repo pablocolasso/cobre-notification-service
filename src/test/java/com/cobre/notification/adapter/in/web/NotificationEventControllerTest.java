@@ -61,14 +61,18 @@ class NotificationEventControllerTest extends AbstractIntegrationTest {
 
     @Test
     void missingAndInvalidKeysReturnTheSameUnauthorizedBody() throws Exception {
-        MvcResult missing = mockMvc.perform(get("/notification_events"))
+        MvcResult missing = mockMvc.perform(get("/notification_events").header("X-Request-Id", "corr-401"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("unauthorized"))
+                .andExpect(jsonPath("$.correlation_id").value("corr-401"))
                 .andReturn();
-        MvcResult invalid = mockMvc.perform(get("/notification_events").header("X-API-Key", "nope"))
+        MvcResult invalid = mockMvc.perform(get("/notification_events")
+                        .header("X-API-Key", "nope")
+                        .header("X-Request-Id", "corr-401"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("unauthorized"))
+                .andExpect(jsonPath("$.correlation_id").value("corr-401"))
                 .andReturn();
         assertThat(missing.getResponse().getContentAsString()).isEqualTo(invalid.getResponse().getContentAsString());
         assertThat(missing.getResponse().getContentAsString()).doesNotContain("nope");
@@ -191,11 +195,14 @@ class NotificationEventControllerTest extends AbstractIntegrationTest {
 
     @Test
     void unknownIdReturnsProblemDetail() throws Exception {
-        mockMvc.perform(get("/notification_events/{id}", UUID.randomUUID()).header("X-API-Key", OPS))
+        mockMvc.perform(get("/notification_events/{id}", UUID.randomUUID())
+                        .header("X-API-Key", OPS)
+                        .header("X-Request-Id", "corr-missing"))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.code").value("notification_event_not_found"));
+                .andExpect(jsonPath("$.code").value("notification_event_not_found"))
+                .andExpect(jsonPath("$.correlation_id").value("corr-missing"));
     }
 
     @Test
@@ -260,6 +267,7 @@ class NotificationEventControllerTest extends AbstractIntegrationTest {
         assertThat(logs).contains("outcome=\"not_replayable\"");
         assertThat(logs).contains("outcome=\"not_found\"");
         assertThat(logs).contains("correlation_id=\"corr-list\"");
+        assertThat(logs).contains("correlation_id=corr-list");
         assertThat(logs).doesNotContain("Transfer received");
     }
 

@@ -13,8 +13,11 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.CannotCreateTransactionException;
+import org.slf4j.MDC;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -85,6 +88,10 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             problem.setTitle("Invalid request");
         }
         problem.setProperty("code", "invalid_request");
+        String correlationId = currentCorrelationId();
+        if (correlationId != null) {
+            problem.setProperty("correlation_id", correlationId);
+        }
         return super.handleExceptionInternal(ex, problem, headers, statusCode, request);
     }
 
@@ -92,6 +99,22 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setTitle(title);
         problem.setProperty("code", code);
+        String correlationId = currentCorrelationId();
+        if (correlationId != null) {
+            problem.setProperty("correlation_id", correlationId);
+        }
         return problem;
+    }
+
+    private static String currentCorrelationId() {
+        String fromMdc = MDC.get("correlation_id");
+        if (fromMdc != null && !fromMdc.isBlank()) {
+            return fromMdc;
+        }
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            Object value = attributes.getRequest().getAttribute(ApiKeyAuthenticationFilter.CORRELATION_ID_ATTRIBUTE);
+            return value instanceof String correlationId ? correlationId : null;
+        }
+        return null;
     }
 }

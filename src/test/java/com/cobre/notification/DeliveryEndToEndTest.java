@@ -6,6 +6,9 @@ import com.cobre.notification.support.RecordingWebhookServer.ReceivedRequest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -30,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Platform event on Kafka -> subscription check -> PostgreSQL -> worker (claim, retries, lease recovery) ->
  * webhook. Backoff runs in milliseconds; everything else is the production wiring.
  */
+@ExtendWith(OutputCaptureExtension.class)
 @TestPropertySource(properties = {
         "app.delivery.worker.enabled=true",
         "app.delivery.worker.poll-interval=100ms",
@@ -67,7 +71,7 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void subscribedEventIsDeliveredAndCompleted() throws Exception {
+    void subscribedEventIsDeliveredAndCompleted(CapturedOutput output) throws Exception {
         String eventId = publishTo(webhookServer.url("/ok"));
 
         Map<String, Object> notification = awaitStatus(eventId, "COMPLETED");
@@ -93,6 +97,7 @@ class DeliveryEndToEndTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.event_id").value(eventId))
                 .andExpect(jsonPath("$.delivery_status").value("completed"))
                 .andExpect(jsonPath("$.delivery_attempts[0].status").value("success"));
+        assertThat(output.getOut()).doesNotContain("Bank transfer received for $1,500.00");
     }
 
     @Test

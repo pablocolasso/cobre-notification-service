@@ -35,8 +35,8 @@ spring:
 
 logging:
   pattern:
-    # Same layout as the Spring Boot default plus %kvp, so SLF4J key-values are visible.
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%15.15t] %-40.40logger{39} : %m %kvp%n%wEx"
+    # Same layout as the Spring Boot default plus %kvp and %mdc.
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%15.15t] %-40.40logger{39} : %m %kvp %mdc%n%wEx"
 
 management:
   server:
@@ -49,6 +49,12 @@ management:
     health:
       probes:
         enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
 
 app:
   kafka:

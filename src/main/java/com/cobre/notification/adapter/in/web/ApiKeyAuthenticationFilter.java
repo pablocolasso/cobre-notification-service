@@ -8,6 +8,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -41,15 +42,27 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        bindCorrelationId(request);
-        String presented = request.getHeader(API_KEY_HEADER);
-        ApiKey matched = match(presented);
-        if (matched == null) {
-            writeUnauthorized(response);
-            return;
+        String correlationId = bindCorrelationId(request);
+        MDC.put("correlation_id", correlationId);
+        try {
+            String presented = request.getHeader(API_KEY_HEADER);
+            ApiKey matched = match(presented);
+            if (matched == null) {
+                writeUnauthorized(response, correlationId);
+                return;
+            }
+            Requester requester = toRequester(matched);
+            request.setAttribute(REQUESTER_ATTRIBUTE, requester);
+            MDC.put("caller", requester.keyName());
+            if (requester instanceof Requester.Client client) {
+                MDC.put("client_id", client.clientId());
+            }
+            filterChain.doFilter(request, response);
+        } finally {
+            MDC.remove("correlation_id");
+            MDC.remove("caller");
+            MDC.remove("client_id");
         }
-        request.setAttribute(REQUESTER_ATTRIBUTE, toRequester(matched));
-        filterChain.doFilter(request, response);
     }
 
     private ApiKey match(String presented) {
@@ -73,17 +86,19 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 : new Requester.Client(key.name(), key.clientId());
     }
 
-    private static void bindCorrelationId(HttpServletRequest request) {
+    private static String bindCorrelationId(HttpServletRequest request) {
         String incoming = request.getHeader(REQUEST_ID_HEADER);
         String correlationId = incoming == null || incoming.isBlank() ? UUID.randomUUID().toString() : incoming;
         request.setAttribute(CORRELATION_ID_ATTRIBUTE, correlationId);
+        return correlationId;
     }
 
-    private void writeUnauthorized(HttpServletResponse response) throws IOException {
+    private void writeUnauthorized(HttpServletResponse response, String correlationId) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED,
                 "The API key is missing or invalid");
         problem.setTitle("Unauthorized");
         problem.setProperty("code", "unauthorized");
+        problem.setProperty("correlation_id", correlationId);
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

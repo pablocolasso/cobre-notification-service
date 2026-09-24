@@ -5,6 +5,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.Duration;
@@ -14,6 +18,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import java.nio.charset.StandardCharsets;
+
+@ExtendWith(OutputCaptureExtension.class)
 class IngestionIntegrationTest extends AbstractIntegrationTest {
 
     private static final String CLIENT_ID = "CLIENT001";
@@ -78,6 +85,21 @@ class IngestionIntegrationTest extends AbstractIntegrationTest {
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(countByEventId(marker)).isEqualTo(1));
         assertThat(countByEventId(unsubscribed)).isZero();
+    }
+
+    @Test
+    void correlationIdFromKafkaHeaderAppearsInMdc(CapturedOutput output) {
+        String eventId = uniqueEventId();
+        var record = new ProducerRecord<>(topic, CLIENT_ID, """
+                {"schema_version":1,"event_id":"%s","event_type":"%s","client_id":"%s",
+                 "occurred_at":"2026-09-23T12:00:00Z","content":"Credit card payment received for $150.00"}
+                """.formatted(eventId, EVENT_TYPE, CLIENT_ID));
+        record.headers().add("correlation-id", "corr-kafka-1".getBytes(StandardCharsets.UTF_8));
+        kafkaTemplate.send(record).join();
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(countByEventId(eventId)).isEqualTo(1));
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(output.getOut()).contains("correlation_id=corr-kafka-1"));
     }
 
     @Test
