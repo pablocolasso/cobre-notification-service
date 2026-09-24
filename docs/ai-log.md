@@ -527,11 +527,10 @@ Time per sub-step (agent wall clock; human review not included):
 
 | Sub-step | Commit | Time |
 |---|---|---|
-| 1. Auth filter, named keys, 401 | (this batch) | 14:03 - 14:13 (~10 min, implemented with the rest) |
-| 2. Scoping, filters, replay, audit, ProblemDetail | (this batch) | same window |
-| 3. Tests (unit, web, concurrent replay) | (this batch) | same window |
-| 4. Fixture seeder + compose keys | (this batch) | same window |
-| 5. OpenAPI, ADR-006/007, A13, ai-log | (this batch) | same window |
+| Auth, scoping, replay, audit, ProblemDetail, OpenAPI | `9189e57` | 14:03 - 14:13 (~10 min, one pass) |
+| Fixture seeder + compose keys | `804dc0d` | same window |
+| Tests (unit, web, concurrent replay, seeder) | `e0c51b5` | same window |
+| ADR-006/007, A13, ai-log | `9c02880` | same window |
 
 The implementation was written as one pass and split into commits at the end.
 
@@ -573,4 +572,5 @@ Pending review
 
 ### Resulting change
 
-Phase 3 commits on `develop` (no push). ADR-006 and ADR-007 Proposed. `docs/assumptions.md` records A13.
+Commits `9189e57`, `804dc0d`, `e0c51b5`, `9c02880` on `develop` (no push). ADR-006 and ADR-007 Proposed.
+`docs/assumptions.md` records A13.
