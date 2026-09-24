@@ -2,3 +2,8 @@ spring:
   kafka:
     consumer:
       group-id: notification-service-test
+
+app:
+  delivery:
+    worker:
+      enabled: false

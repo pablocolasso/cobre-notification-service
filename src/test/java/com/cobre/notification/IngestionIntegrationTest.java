@@ -5,7 +5,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.Duration;
@@ -26,9 +25,6 @@ class IngestionIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     SubscriptionRepository subscriptions;
-
-    @Autowired
-    JdbcClient jdbcClient;
 
     @Value("${app.kafka.topics.platform-events}")
     String topic;

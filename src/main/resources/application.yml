@@ -42,3 +42,12 @@ app:
     topics:
       platform-events: platform.events.v1
       platform-events-dlt: platform.events.v1.DLT
+  delivery:
+    batch-size: 20
+    lease-duration: 60s
+    worker:
+      enabled: true
+      poll-interval: 500ms
+  webhook:
+    connect-timeout: 2s
+    request-timeout: 5s

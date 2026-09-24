@@ -22,7 +22,7 @@ class NotificationEventsSchemaConstraintsTest extends AbstractIntegrationTest {
 
     @AfterEach
     void cleanUp() {
-        jdbcTemplate.update("DELETE FROM notification_events");
+        deleteAllNotifications();
     }
 
     @Test
