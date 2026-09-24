@@ -74,3 +74,6 @@ app:
   webhook:
     connect-timeout: 2s
     request-timeout: 5s
+    ssrf:
+      strict: true
+      allowed-hosts: []

@@ -4,6 +4,7 @@ import com.cobre.notification.domain.model.DeliveryError;
 import com.cobre.notification.domain.model.DeliveryOutcome;
 import com.cobre.notification.domain.model.DeliveryResult;
 import com.cobre.notification.domain.model.DeliveryResult.HttpResponseReceived;
+import com.cobre.notification.domain.model.DeliveryResult.InvalidDestination;
 import com.cobre.notification.domain.model.DeliveryResult.TransportFailure;
 
 /**
@@ -16,6 +17,7 @@ public class HttpStatusDeliveryResultClassifier implements DeliveryResultClassif
     public DeliveryOutcome classify(DeliveryResult result) {
         return switch (result) {
             case HttpResponseReceived response -> classifyStatus(response.statusCode());
+            case InvalidDestination ignored -> DeliveryOutcome.PERMANENT_FAILURE;
             case TransportFailure failure when DeliveryError.INVALID_DESTINATION.equals(failure.error().code()) ->
                     DeliveryOutcome.PERMANENT_FAILURE;
             case TransportFailure ignored -> DeliveryOutcome.RETRYABLE_FAILURE;

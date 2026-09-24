@@ -24,3 +24,9 @@ app:
       - name: ops
         key: ${OPS_API_KEY:dev-ops}
         role: OPERATOR
+  webhook:
+    ssrf:
+      allowed-hosts:
+        - webhook-mock
+        - localhost
+        - 127.0.0.1

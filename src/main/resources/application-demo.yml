@@ -1,4 +1,10 @@
 app:
+  webhook:
+    ssrf:
+      allowed-hosts:
+        - webhook-mock
+        - localhost
+        - 127.0.0.1
   delivery:
     # Short enough to watch RETRYING -> COMPLETED/FAILED live; worst case 2+4+8+16 s for 5 attempts.
     retry:

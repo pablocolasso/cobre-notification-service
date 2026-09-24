@@ -29,3 +29,8 @@ app:
       - name: ops
         key: test-ops
         role: OPERATOR
+  webhook:
+    ssrf:
+      allowed-hosts:
+        - localhost
+        - 127.0.0.1

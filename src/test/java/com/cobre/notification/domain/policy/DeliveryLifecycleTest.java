@@ -4,6 +4,7 @@ import com.cobre.notification.domain.model.AttemptStatus;
 import com.cobre.notification.domain.model.DeliveryDecision;
 import com.cobre.notification.domain.model.DeliveryError;
 import com.cobre.notification.domain.model.DeliveryResult.HttpResponseReceived;
+import com.cobre.notification.domain.model.DeliveryResult.InvalidDestination;
 import com.cobre.notification.domain.model.DeliveryResult.TransportFailure;
 import com.cobre.notification.domain.model.DeliveryStatus;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,18 @@ class DeliveryLifecycleTest {
         assertThat(decision.deliveredAt()).isEqualTo(NOW);
         assertThat(decision.nextAttemptAt()).isNull();
         assertThat(decision.lastError()).isNull();
+    }
+
+    @Test
+    void invalidDestinationFailsImmediately() {
+        DeliveryError blocked = new DeliveryError(DeliveryError.INVALID_DESTINATION, "blocked_address");
+
+        DeliveryDecision decision = lifecycle.onResult(1, new InvalidDestination(blocked), NOW);
+
+        assertThat(decision.status()).isEqualTo(DeliveryStatus.FAILED);
+        assertThat(decision.attemptStatus()).isEqualTo(AttemptStatus.PERMANENT_FAILURE);
+        assertThat(decision.lastError()).isEqualTo(blocked);
+        assertThat(decision.nextAttemptAt()).isNull();
     }
 
     @Test

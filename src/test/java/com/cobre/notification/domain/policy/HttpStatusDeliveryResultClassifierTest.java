@@ -3,7 +3,9 @@ package com.cobre.notification.domain.policy;
 import com.cobre.notification.domain.model.DeliveryError;
 import com.cobre.notification.domain.model.DeliveryOutcome;
 import com.cobre.notification.domain.model.DeliveryResult.HttpResponseReceived;
+import com.cobre.notification.domain.model.DeliveryResult.InvalidDestination;
 import com.cobre.notification.domain.model.DeliveryResult.TransportFailure;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -59,6 +61,12 @@ class HttpStatusDeliveryResultClassifierTest {
     @ValueSource(strings = {DeliveryError.INVALID_DESTINATION})
     void invalidDestinationIsPermanent(String code) {
         assertThat(classifier.classify(new TransportFailure(new DeliveryError(code, "x"))))
+                .isEqualTo(DeliveryOutcome.PERMANENT_FAILURE);
+    }
+
+    @Test
+    void invalidDestinationResultIsPermanent() {
+        assertThat(classifier.classify(new InvalidDestination(new DeliveryError(DeliveryError.INVALID_DESTINATION, "blocked_address"))))
                 .isEqualTo(DeliveryOutcome.PERMANENT_FAILURE);
     }
 }

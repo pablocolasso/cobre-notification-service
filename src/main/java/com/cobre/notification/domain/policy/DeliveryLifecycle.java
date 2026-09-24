@@ -6,6 +6,7 @@ import com.cobre.notification.domain.model.DeliveryError;
 import com.cobre.notification.domain.model.DeliveryOutcome;
 import com.cobre.notification.domain.model.DeliveryResult;
 import com.cobre.notification.domain.model.DeliveryResult.HttpResponseReceived;
+import com.cobre.notification.domain.model.DeliveryResult.InvalidDestination;
 import com.cobre.notification.domain.model.DeliveryResult.TransportFailure;
 import com.cobre.notification.domain.model.DeliveryStatus;
 
@@ -61,6 +62,7 @@ public class DeliveryLifecycle {
         return switch (result) {
             case HttpResponseReceived response -> DeliveryError.httpStatus(response.statusCode());
             case TransportFailure failure -> failure.error();
+            case InvalidDestination destination -> destination.error();
         };
     }
 

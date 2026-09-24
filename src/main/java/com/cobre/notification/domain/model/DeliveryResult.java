@@ -16,4 +16,10 @@ public sealed interface DeliveryResult {
 
     record TransportFailure(DeliveryError error) implements DeliveryResult {
     }
+
+    /**
+     * The destination was rejected before any HTTP call (SSRF, bad scheme, unresolvable host).
+     */
+    record InvalidDestination(DeliveryError error) implements DeliveryResult {
+    }
 }
