@@ -297,7 +297,7 @@ Interpretado como OWASP API Security Top 10 2023.
   - `notification.processing.latency` (desde `event_created_at` hasta `delivered_at`)
   - `notification.backlog{status=pending|retrying|processing}` (gauge, query cacheada cada 15s)
   - `notification.backlog.oldest.age.seconds`
-  - `kafka.dlt.published`
+  - `notification.dlt.published`
   - Consumer lag nativo (`kafka.consumer.fetch.manager.records.lag.max`, bindeado por Spring Kafka/Micrometer).
 - **Exposición**: `/actuator/health`, `/actuator/metrics`, `/actuator/prometheus` (SHOULD).
 - **Alertas propuestas** (documentadas): backlog de retrying creciente por 10 minutos; oldest pending age > 5 minutos; tasa de `permanent`/`failed` > X% en 5 minutos; consumer lag sostenido; mensajes en DLT > 0.
