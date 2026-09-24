@@ -1,66 +1,65 @@
-# Outbound and API security
+# Security
 
-This note covers the Phase 4 outbound controls and the known limits. Tenant isolation and API keys
-are in [ADR-007](adr/ADR-007-api-keys-and-operator-audit.md).
+Interpreted as **OWASP API Security Top 10 2023**, mapped to Top 10 2021 where useful (A01, A07,
+A10, A05, A09). Tenant keys: [ADR-007](adr/ADR-007-api-keys-and-operator-audit.md).
 
-## Webhook destination (SSRF)
+## API1 Broken Object Level Authorization (2021 A01)
 
-`WebhookDestinationGuard` runs in `JdkWebhookClient` **before** any HTTP call.
+IDs are in the URL. A client must not learn whether another tenant's row exists.
 
-| Mode | Config | Behaviour |
-|---|---|---|
-| Strict (default) | `app.webhook.ssrf.strict=true` | `https` only; port 443 or `> 1023` (plus `extra-allowed-ports`); DNS resolve and reject loopback, link-local, RFC 1918, any-local, multicast, CGNAT `100.64.0.0/10`, IPv6 ULA `fc00::/7`. |
-| Permissive | `app.webhook.ssrf.strict=false` | Parseable `http`/`https` only. No DNS or IP checks. One WARN per URL, with scheme and host only. |
-| Allowlist | `app.webhook.ssrf.allowed-hosts` | Hosts in the list skip the strict IP, port and `https`-only rules. Scheme must still be `http` or `https`. |
+**Mitigation:** tenant comes from the API key (`Requester`). A client's `client_id` query param is
+ignored. SQL and use cases filter by tenant. Cross-tenant get/replay → **404**, not 403.
 
-Production default: empty allowlist. Local and demo profiles allow `webhook-mock` (compose WireMock)
-plus `localhost` / `127.0.0.1` so a host-run demo against the published WireMock port still works.
+## API2 Broken Authentication (2021 A07)
 
-A rejected URL becomes `DeliveryResult.InvalidDestination` → `FAILED` with
-`error_code = invalid_destination`. No request is sent. Redirects stay `HttpClient.Redirect.NEVER`
-(Phase 1/2) so a 3xx cannot bounce into an internal address.
+The API is public.
 
-The presentation webhook is expected to be public `https`. Setting
-`WEBHOOK_URL=https://… docker compose up app` does **not** need an allowlist entry. If the resolver
-returns a blocked address, add the host with `WEBHOOK_SSRF_ALLOWED_HOSTS` (merged, not replaced).
-See [local-setup.md](local-setup.md).
+**Mitigation:** `X-API-Key` from env, constant-time compare, same 401 body if missing or wrong.
+The key is never logged; logs use the configured **name**. No keys in the default (non-local)
+profile → fail closed.
 
-### Known limitation: DNS rebinding (TOCTOU)
+## API3 Broken Object Property Level Authorization / data exposure (2021 A01)
 
-The guard resolves the host, then `HttpClient` resolves it again when it connects. A resolver that
-answers with a public address first and a private one a moment later can bypass the check. Pinning
-the connected address is out of this scope. Mitigations if this service is exposed to untrusted
-subscription URLs: resolve once and connect to the validated address, or put an egress proxy in
-front of outbound webhooks.
+`content` is financial. `webhook_url` can carry tokens. `signing_secret` is a credential.
 
-## HMAC webhook signature
+**Mitigation:** `content` only in the DB, the webhook body and the owner/operator API response.
+Never in logs, metrics, `last_error` or `toString`. List/detail do not expose the raw webhook URL
+on the list; detail masks it to the host. Secret never in logs or errors.
 
-`subscriptions.signing_secret` is nullable (`VARCHAR(256)`, Flyway `V2`). When it is null or blank,
-the client sends no signature headers (clean demo against WireMock). When it is set:
+## API8 Security misconfiguration (2021 A05)
 
-- `X-Cobre-Timestamp`: epoch seconds from the injected `Clock`
-- `X-Cobre-Signature`: `v1=` + hex(`HMAC-SHA256(secret, timestamp + "." + body)`)
+**Mitigation:** management on port **8081** (not the public API port). Compose publishes 8081 for
+local/demo only. `ddl-auto=validate`. Redirects disabled. HTTP/1.1 (no `Upgrade: h2c`).
 
-The body is the exact JSON bytes about to be posted.
+## API10 Unsafe consumption of APIs — SSRF (2021 A10)
 
-**Secret source:** the **active** subscription at claim time
-(`RETURNING (SELECT s.signing_secret FROM subscriptions s WHERE … AND s.active LIMIT 1)`).
-It is not snapshotted onto `notification_events`. A rotation applies to the next claim. The
-webhook URL remains the snapshot taken at ingest. If the subscription is inactive at claim, the
-secret is null and the request is unsigned.
+Webhook URLs are tenant-controlled.
 
-The secret is never written to logs, metrics, `last_error`, or `toString` of `Subscription`,
-`DeliveryTask` or the claim row.
+**Mitigation:** `WebhookDestinationGuard` before every POST. Strict default: `https`, public
+addresses, port 443 or `> 1023`. Allowlist for WireMock / localhost. `Redirect.NEVER`.
 
-Demo seed: `WEBHOOK_SIGNING_SECRET` sets `app.demo.signing-secret` for every subscription that does
-not override it. A per-row `signing-secret` under `app.demo.subscriptions[]` still wins.
+**Limit:** DNS rebinding (TOCTOU between the guard's resolve and `HttpClient`). Not pinned in this
+scope. Presentation public HTTPS URLs do not need an allowlist;
+`WEBHOOK_SSRF_ALLOWED_HOSTS` is an escape hatch.
 
-## HTTP/1.1
+## Injection (API Top 10 2023 API8 / classic A03)
 
-`HttpClient` is built with `Version.HTTP_1_1` and does not send `Upgrade: h2c`. That avoids a
-cleartext protocol upgrade on the local WireMock path.
+JSON bind + typed JDBC/JPA parameters. Kafka values are not concatenated into SQL. Invalid events
+go to the DLT without putting the payload in logs.
 
-## Sensitive data
+## HMAC
 
-`content` and `signing_secret` stay out of logs, error text and metric tags. Error messages use
-closed reason codes from the guard (`blocked_address`, `https_required`, …).
+Optional `HMAC-SHA256(secret, timestamp + "." + body)`. Headers `X-Cobre-Timestamp` and
+`X-Cobre-Signature: v1=`. Secret from the active subscription at claim. Unsigned if null.
+
+## Public vs internal errors
+
+| Surface | What the caller sees |
+|---|---|
+| API ProblemDetail | Stable `code`, short detail, `correlation_id`. No SQL, no stack, no `content`. |
+| `last_error` | Sanitizer: code + service-built message, 500 chars. |
+| Logs | IDs, `error_code`, `http_status`. No keys, secrets, payload or full webhook URL. |
+| DLT headers | Closed `reason` / `detail`, not the exception message. |
+
+Production follow-ups: hashed keys at rest, secret manager, egress proxy, DNS pinning, SIEM for
+`audit` lines.
