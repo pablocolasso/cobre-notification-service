@@ -683,3 +683,69 @@ is unnecessary.
 
 Commits `d5e4f9b`, `0b14170`, `2d55aba`, `112367e`, `dcba0ea` on `develop` (no push), plus the
 follow-up review commit. `docs/security.md` records SSRF, HMAC and the TOCTOU limit.
+
+---
+
+## Entry 9 - Phase 5 observability
+
+**Date:** 2026-09-24
+**Type:** code generation, test generation, verification
+
+### Goal
+
+Micrometer counters/timers from the plan (final names and closed-set tags), cached backlog gauges,
+structured logging + MDC, ProblemDetail `correlation_id`, health probes, documented alerts. Do not
+start Phase 6.
+
+### Prompt (summary)
+
+"Execute Phase 5 from plan-v2. Source: challenge.md. Show the file list first. Metrics as named;
+no `client_id` tags. Gauges cached every 15s. ECS on the local profile. MDC correlation from
+`X-Request-Id` / Kafka `correlation-id`. Health liveness/readiness with DB and Kafka. Document
+alert thresholds in docs/observability.md. Commits per sub-step, no push."
+
+### Relevant AI output
+
+Time per sub-step (agent wall clock; human review not included):
+
+| Sub-step | Commit | Time |
+|---|---|---|
+| Counters and timers | `affa5e6` | ~15 min |
+| Backlog gauges | `5d9098f` | ~10 min |
+| Logging / MDC / health | `cc316a5` | ~15 min |
+| Docs + ai-log | *(this commit)* | ~5 min |
+
+- Port `NotificationMetrics` (no Micrometer in application). Adapter increments the named meters.
+  DLT counter renamed from `kafka.dlt.published` to `notification.dlt.published`.
+- Invalid Kafka events increment `events.received{invalid}`; unexpected DLT `{error}`.
+- `subscription_inactive` replay counts as `not_replayable` (closed set).
+- `BacklogMetricsBinder` queries `BacklogQuery` every 15s; gauges read the cache.
+- Local profile: `logging.structured.format.console=ecs`. Tests keep the text pattern plus `%mdc`.
+- Management port stays 8081 (compose only for local/demo).
+
+### Deviations
+
+- HTTP MDC also sets `caller` (plan §14; not in the phase prompt list).
+- Kafka readiness is whatever Spring Boot auto-configures; the readiness group was not hard-coded
+  to `kafka` so a missing contributor cannot fail the context.
+- `processing.latency` has no tags (the prompt listed a timer without extra tags).
+
+### Not verified
+
+- Live Prometheus scrape against compose.
+- Kafka health indicator name on the management port (probes are enabled; not hit over HTTP in
+  tests because `@SpringBootTest` is MOCK).
+- ECS JSON shape on the local profile (tests do not activate `local`).
+
+### Human analysis
+
+*(pending review)*
+
+### Decision
+
+- Do not start Phase 6 until it is explicitly requested.
+
+### Resulting change
+
+Commits on `develop` (no push). `docs/observability.md` records metrics, MDC and suggested alerts.
+
