@@ -119,7 +119,7 @@ class DeliverNotificationServiceTest {
         var lifecycle = new DeliveryLifecycle(new HttpStatusDeliveryResultClassifier(),
                 new ExponentialBackoffRetryPolicy(Duration.ofSeconds(5), Duration.ofMinutes(10), 5, new Random(1)));
         return new DeliveryAttemptProcessor(deliveries, task -> new HttpResponseReceived(200), lifecycle, clock(),
-                System::nanoTime, WORKER_ID);
+                System::nanoTime, WORKER_ID, com.cobre.notification.application.port.out.NoOpNotificationMetrics.INSTANCE);
     }
 
     private static Clock clock() {

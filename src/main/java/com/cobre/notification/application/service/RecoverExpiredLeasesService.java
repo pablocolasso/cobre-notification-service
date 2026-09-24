@@ -4,12 +4,15 @@ import com.cobre.notification.application.port.in.RecoverExpiredLeasesUseCase;
 import com.cobre.notification.application.port.out.DeliveryRepository;
 import com.cobre.notification.application.port.out.ExpiredLease;
 import com.cobre.notification.application.port.out.LeaseRecovery;
+import com.cobre.notification.application.port.out.NotificationMetrics;
 import com.cobre.notification.domain.model.DeliveryDecision;
+import com.cobre.notification.domain.model.DeliveryStatus;
 import com.cobre.notification.domain.policy.DeliveryLifecycle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 
@@ -21,13 +24,15 @@ public class RecoverExpiredLeasesService implements RecoverExpiredLeasesUseCase 
     private final DeliveryLifecycle lifecycle;
     private final Clock clock;
     private final int batchSize;
+    private final NotificationMetrics metrics;
 
     public RecoverExpiredLeasesService(DeliveryRepository deliveries, DeliveryLifecycle lifecycle, Clock clock,
-                                       int batchSize) {
+                                       int batchSize, NotificationMetrics metrics) {
         this.deliveries = deliveries;
         this.lifecycle = lifecycle;
         this.clock = clock;
         this.batchSize = batchSize;
+        this.metrics = metrics;
     }
 
     @Override
@@ -38,6 +43,14 @@ public class RecoverExpiredLeasesService implements RecoverExpiredLeasesUseCase 
             DeliveryDecision decision = lifecycle.onLeaseExpired(lease.cycleAttemptNumber(), now);
             if (deliveries.recoverLease(new LeaseRecovery(lease, decision, now))) {
                 recovered++;
+                String eventType = lease.eventType() == null ? "unknown" : lease.eventType();
+                metrics.deliveryAttempt("abandoned", eventType, Duration.ZERO);
+                if (decision.status() == DeliveryStatus.RETRYING) {
+                    metrics.retryScheduled();
+                }
+                if (decision.status() == DeliveryStatus.FAILED) {
+                    metrics.failed("max_attempts_reached");
+                }
                 log.atWarn()
                         .setMessage("Expired lease recovered; in-progress attempt abandoned")
                         .addKeyValue("notification_event_id", lease.notificationEventId())

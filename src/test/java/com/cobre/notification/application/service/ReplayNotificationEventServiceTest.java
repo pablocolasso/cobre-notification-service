@@ -44,7 +44,8 @@ class ReplayNotificationEventServiceTest {
     private final Store store = new Store();
     private final RecordingAuditLog audit = new RecordingAuditLog();
     private final ReplayNotificationEventService service = new ReplayNotificationEventService(
-            store, store, store, audit, Clock.fixed(NOW, ZoneOffset.UTC));
+            store, store, store, audit, Clock.fixed(NOW, ZoneOffset.UTC),
+            com.cobre.notification.application.port.out.NoOpNotificationMetrics.INSTANCE);
 
     @Test
     void replaysAFailedNotificationAndAuditsAcceptance() {

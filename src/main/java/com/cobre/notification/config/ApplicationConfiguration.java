@@ -5,6 +5,7 @@ import com.cobre.notification.application.port.out.DeliveryRepository;
 import com.cobre.notification.application.port.out.IdGenerator;
 import com.cobre.notification.application.port.out.NotificationEventQueryRepository;
 import com.cobre.notification.application.port.out.NotificationEventRepository;
+import com.cobre.notification.application.port.out.NotificationMetrics;
 import com.cobre.notification.application.port.out.SubscriptionRepository;
 import com.cobre.notification.application.port.out.WebhookClient;
 import com.cobre.notification.application.service.DeliverNotificationService;
@@ -62,8 +63,9 @@ class ApplicationConfiguration {
     IngestPlatformEventService ingestPlatformEventService(SubscriptionRepository subscriptions,
                                                           NotificationEventRepository notifications,
                                                           IdGenerator ids,
-                                                          Clock clock) {
-        return new IngestPlatformEventService(subscriptions, notifications, ids, clock);
+                                                          Clock clock,
+                                                          NotificationMetrics metrics) {
+        return new IngestPlatformEventService(subscriptions, notifications, ids, clock, metrics);
     }
 
     @Bean
@@ -76,8 +78,9 @@ class ApplicationConfiguration {
                                                                   NotificationEventRepository notifications,
                                                                   SubscriptionRepository subscriptions,
                                                                   AuditLog auditLog,
-                                                                  Clock clock) {
-        return new ReplayNotificationEventService(queries, notifications, subscriptions, auditLog, clock);
+                                                                  Clock clock,
+                                                                  NotificationMetrics metrics) {
+        return new ReplayNotificationEventService(queries, notifications, subscriptions, auditLog, clock, metrics);
     }
 
     @Bean
@@ -113,9 +116,10 @@ class ApplicationConfiguration {
                                                       WebhookClient webhookClient,
                                                       DeliveryLifecycle lifecycle,
                                                       Clock clock,
-                                                      WorkerIdentity worker) {
+                                                      WorkerIdentity worker,
+                                                      NotificationMetrics metrics) {
         return new DeliveryAttemptProcessor(deliveries, webhookClient, lifecycle, clock, System::nanoTime,
-                worker.id());
+                worker.id(), metrics);
     }
 
     @Bean
@@ -134,8 +138,10 @@ class ApplicationConfiguration {
     RecoverExpiredLeasesService recoverExpiredLeasesService(DeliveryRepository deliveries,
                                                             DeliveryLifecycle lifecycle,
                                                             Clock clock,
-                                                            DeliveryProperties properties) {
-        return new RecoverExpiredLeasesService(deliveries, lifecycle, clock, properties.worker().recoveryBatchSize());
+                                                            DeliveryProperties properties,
+                                                            NotificationMetrics metrics) {
+        return new RecoverExpiredLeasesService(deliveries, lifecycle, clock, properties.worker().recoveryBatchSize(),
+                metrics);
     }
 
     /**

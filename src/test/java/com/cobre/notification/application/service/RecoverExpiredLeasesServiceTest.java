@@ -26,7 +26,8 @@ class RecoverExpiredLeasesServiceTest {
             new DeliveryLifecycle(new HttpStatusDeliveryResultClassifier(),
                     new ExponentialBackoffRetryPolicy(Duration.ofSeconds(5), Duration.ofMinutes(10), MAX_ATTEMPTS,
                             new Random(7))),
-            Clock.fixed(NOW, ZoneOffset.UTC), 10);
+            Clock.fixed(NOW, ZoneOffset.UTC), 10,
+            com.cobre.notification.application.port.out.NoOpNotificationMetrics.INSTANCE);
 
     @Test
     void expiredLeaseWithBudgetLeftIsRescheduledAndItsAttemptAbandoned() {

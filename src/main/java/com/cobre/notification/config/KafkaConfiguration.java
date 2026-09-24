@@ -2,6 +2,7 @@ package com.cobre.notification.config;
 
 import com.cobre.notification.adapter.in.kafka.DeadLetterMetrics;
 import com.cobre.notification.adapter.in.kafka.DeadLetterReason;
+import com.cobre.notification.application.port.out.NotificationMetrics;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.slf4j.Logger;
@@ -41,7 +42,8 @@ class KafkaConfiguration {
     @Bean
     DefaultErrorHandler kafkaErrorHandler(KafkaOperations<String, String> kafkaTemplate,
                                           KafkaRetryProperties retry,
-                                          DeadLetterMetrics metrics,
+                                          DeadLetterMetrics deadLetterMetrics,
+                                          NotificationMetrics notificationMetrics,
                                           @Value("${app.kafka.topics.platform-events-dlt}") String deadLetterTopic) {
         var deadLetterPublisher = new DeadLetterPublishingRecoverer(kafkaTemplate,
                 (record, failure) -> new TopicPartition(deadLetterTopic, -1));
@@ -56,7 +58,8 @@ class KafkaConfiguration {
         ConsumerRecordRecoverer recoverer = (record, failure) -> {
             deadLetterPublisher.accept(record, failure);
             DeadLetterReason reason = DeadLetterReason.of(failure);
-            metrics.published(reason);
+            deadLetterMetrics.published(reason);
+            notificationMetrics.eventReceived(reason == DeadLetterReason.INVALID_EVENT ? "invalid" : "error");
             log.atWarn()
                     .setMessage("Platform event sent to dead-letter topic")
                     .addKeyValue("topic", record.topic())

@@ -31,7 +31,8 @@ class IngestPlatformEventServiceTest {
     private static final UUID GENERATED_ID = UUID.fromString("00000000-0000-0000-0000-00000000000a");
 
     private final IngestPlatformEventService service = new IngestPlatformEventService(
-            subscriptions, notifications, () -> GENERATED_ID, Clock.fixed(NOW, ZoneOffset.UTC));
+            subscriptions, notifications, () -> GENERATED_ID, Clock.fixed(NOW, ZoneOffset.UTC),
+            com.cobre.notification.application.port.out.NoOpNotificationMetrics.INSTANCE);
 
     @Test
     void createsPendingNotificationWithWebhookSnapshotWhenSubscriptionIsActive() {

@@ -223,7 +223,7 @@ class NotificationEventPersistenceAdapterTest extends AbstractIntegrationTest {
 
         assertThat(deliveries.findExpiredLeases(NOW.plus(LEASE), 10)).isEmpty();
         assertThat(deliveries.findExpiredLeases(NOW.plus(LEASE).plusMillis(1), 10))
-                .containsExactly(new ExpiredLease(task.notificationEventId(), "worker-1", 1, 1));
+                .containsExactly(new ExpiredLease(task.notificationEventId(), "worker-1", 1, 1, "credit_card_payment"));
     }
 
     @Test

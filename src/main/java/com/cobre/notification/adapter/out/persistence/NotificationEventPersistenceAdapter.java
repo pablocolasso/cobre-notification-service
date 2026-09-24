@@ -1,5 +1,7 @@
 package com.cobre.notification.adapter.out.persistence;
 
+import com.cobre.notification.application.port.out.BacklogQuery;
+import com.cobre.notification.application.port.out.BacklogSnapshot;
 import com.cobre.notification.application.port.out.ClaimRequest;
 import com.cobre.notification.application.port.out.DeliveryCompletion;
 import com.cobre.notification.application.port.out.DeliveryRepository;
@@ -28,7 +30,7 @@ import static com.cobre.notification.adapter.out.persistence.PersistenceTime.toI
 import static com.cobre.notification.adapter.out.persistence.PersistenceTime.toTimestamp;
 
 @Component
-class NotificationEventPersistenceAdapter implements NotificationEventRepository, DeliveryRepository {
+class NotificationEventPersistenceAdapter implements NotificationEventRepository, DeliveryRepository, BacklogQuery {
 
     private final JdbcClient jdbcClient;
     private final TransactionTemplate transactionTemplate;
@@ -243,7 +245,7 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
     @Override
     public List<ExpiredLease> findExpiredLeases(Instant now, int limit) {
         return jdbcClient.sql("""
-                        SELECT id, locked_by, attempt_count, cycle_attempt_count
+                        SELECT id, locked_by, attempt_count, cycle_attempt_count, event_type
                         FROM notification_events
                         WHERE delivery_status = 'PROCESSING'
                           AND locked_until < :now
@@ -256,8 +258,47 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                         rs.getObject("id", UUID.class),
                         rs.getString("locked_by"),
                         rs.getInt("attempt_count"),
-                        rs.getInt("cycle_attempt_count")))
+                        rs.getInt("cycle_attempt_count"),
+                        rs.getString("event_type")))
                 .list();
+    }
+
+    @Override
+    public BacklogSnapshot snapshot(Instant now) {
+        var counts = jdbcClient.sql("""
+                        SELECT delivery_status, count(*) AS count
+                        FROM notification_events
+                        WHERE delivery_status IN ('PENDING', 'RETRYING', 'PROCESSING')
+                        GROUP BY delivery_status
+                        """)
+                .query()
+                .listOfRows();
+        long pending = 0;
+        long retrying = 0;
+        long processing = 0;
+        for (var row : counts) {
+            long count = ((Number) row.get("count")).longValue();
+            switch (String.valueOf(row.get("delivery_status"))) {
+                case "PENDING" -> pending = count;
+                case "RETRYING" -> retrying = count;
+                case "PROCESSING" -> processing = count;
+                default -> {
+                }
+            }
+        }
+        Instant oldest = jdbcClient.sql("""
+                        SELECT min(created_at) AS oldest
+                        FROM notification_events
+                        WHERE delivery_status IN ('PENDING', 'RETRYING')
+                        """)
+                .query((rs, rowNum) -> {
+                    var timestamp = rs.getTimestamp("oldest");
+                    return timestamp == null ? null : toInstant(timestamp);
+                })
+                .optional()
+                .orElse(null);
+        long age = oldest == null ? 0 : Math.max(0, now.getEpochSecond() - oldest.getEpochSecond());
+        return new BacklogSnapshot(pending, retrying, processing, age);
     }
 
     @Override

@@ -134,7 +134,7 @@ class ConcurrentWorkersTest extends AbstractIntegrationTest {
     private DeliverNotificationService worker(String workerId, ExecutorService deliveryThreads) {
         Clock clock = Clock.systemUTC();
         var processor = new DeliveryAttemptProcessor(deliveries, webhookClient, lifecycle, clock, System::nanoTime,
-                workerId);
+                workerId, com.cobre.notification.application.port.out.NoOpNotificationMetrics.INSTANCE);
         return new DeliverNotificationService(deliveries, processor, deliveryThreads, MAX_CONCURRENCY,
                 UUID::randomUUID, clock, workerId, Duration.ofSeconds(60));
     }

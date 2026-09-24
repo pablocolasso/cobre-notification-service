@@ -4,6 +4,7 @@ import com.cobre.notification.application.port.in.IngestPlatformEventUseCase;
 import com.cobre.notification.application.port.in.IngestionResult;
 import com.cobre.notification.application.port.out.IdGenerator;
 import com.cobre.notification.application.port.out.NotificationEventRepository;
+import com.cobre.notification.application.port.out.NotificationMetrics;
 import com.cobre.notification.application.port.out.SubscriptionRepository;
 import com.cobre.notification.domain.model.NotificationEvent;
 import com.cobre.notification.domain.model.PlatformEvent;
@@ -18,27 +19,37 @@ public class IngestPlatformEventService implements IngestPlatformEventUseCase {
     private final NotificationEventRepository notifications;
     private final IdGenerator ids;
     private final Clock clock;
+    private final NotificationMetrics metrics;
 
     public IngestPlatformEventService(SubscriptionRepository subscriptions,
                                       NotificationEventRepository notifications,
                                       IdGenerator ids,
-                                      Clock clock) {
+                                      Clock clock,
+                                      NotificationMetrics metrics) {
         this.subscriptions = subscriptions;
         this.notifications = notifications;
         this.ids = ids;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     @Override
     public IngestionResult ingest(PlatformEvent event) {
         Optional<Subscription> subscription = subscriptions.findActive(event.clientId(), event.eventType());
         if (subscription.isEmpty()) {
+            metrics.eventReceived("no_subscription");
             return IngestionResult.NO_SUBSCRIPTION;
         }
 
         NotificationEvent notification =
                 NotificationEvent.pendingFrom(ids.newId(), event, subscription.get(), clock.instant());
 
-        return notifications.saveIfAbsent(notification) ? IngestionResult.ACCEPTED : IngestionResult.DUPLICATE;
+        if (notifications.saveIfAbsent(notification)) {
+            metrics.eventReceived("accepted");
+            metrics.notificationCreated(event.eventType());
+            return IngestionResult.ACCEPTED;
+        }
+        metrics.eventReceived("duplicate");
+        return IngestionResult.DUPLICATE;
     }
 }

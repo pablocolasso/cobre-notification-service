@@ -126,6 +126,6 @@ class DeliveryAttemptProcessorTest {
                 new ExponentialBackoffRetryPolicy(Duration.ofSeconds(5), Duration.ofMinutes(10), MAX_ATTEMPTS,
                         RandomGenerator.of("L64X128MixRandom")));
         return new DeliveryAttemptProcessor(deliveries, client, lifecycle, Clock.fixed(NOW, ZoneOffset.UTC),
-                nanoTime, WORKER_ID);
+                nanoTime, WORKER_ID, com.cobre.notification.application.port.out.NoOpNotificationMetrics.INSTANCE);
     }
 }

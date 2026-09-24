@@ -10,7 +10,7 @@ import java.util.Map;
 @Component
 public class DeadLetterMetrics {
 
-    public static final String PUBLISHED = "kafka.dlt.published";
+    public static final String PUBLISHED = "notification.dlt.published";
 
     private final Map<DeadLetterReason, Counter> published = new EnumMap<>(DeadLetterReason.class);
 
