@@ -1,0 +1,824 @@
+{
+  "info": {
+    "_postman_id": "a7c3e4d1-9b20-4f11-8c6a-0d2e5f8a1b34",
+    "name": "Cobre Notification Service",
+    "description": "Authorization de la colección: **No Auth**. Cada request manda `X-API-Key` en headers. Si en Postman ponés API Key a nivel colección, el request “without API key” sigue autenticado y da 200 — no lo hagas.\n\nSi listar sin key da **200**, el contenedor es un build viejo: `docker compose up --build --wait`.\n\n**Orden:** 00 → 01 → 02 → 03 → 04 → 05. Después publicá `demo/platform-events.jsonl` y corré 06.\n\nKeys: `dev-client-001` / `002` / `003` / `dev-ops`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "client001Key", "value": "dev-client-001" },
+    { "key": "client002Key", "value": "dev-client-002" },
+    { "key": "client003Key", "value": "dev-client-003" },
+    { "key": "opsKey", "value": "dev-ops" },
+    { "key": "evt001Id", "value": "" },
+    { "key": "evt003Id", "value": "" },
+    { "key": "failedReplayId", "value": "" },
+    { "key": "evt101Id", "value": "" },
+    { "key": "evt108Id", "value": "" },
+    { "key": "evt109Id", "value": "" }
+  ],
+  "auth": { "type": "noauth" },
+  "item": [
+    {
+      "name": "00 Auth (401)",
+      "auth": { "type": "noauth" },
+      "item": [
+        {
+          "name": "List without API key → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401 unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('same code as a bad key', () => pm.expect(pm.response.json().code).to.eql('unauthorized'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "X-Request-Id", "value": "postman-no-key" }],
+            "url": "{{baseUrl}}/notification_events"
+          }
+        },
+        {
+          "name": "List with wrong API key → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401 unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('same body shape', () => pm.expect(pm.response.json().code).to.eql('unauthorized'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "not-a-real-key" },
+              { "key": "X-Request-Id", "value": "postman-bad-key" }
+            ],
+            "url": "{{baseUrl}}/notification_events"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Client list and filters (fixture)",
+      "item": [
+        {
+          "name": "CLIENT001 list (fixture + later Kafka)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('only CLIENT001', () => {",
+                  "  pm.expect(body.items.every(i => i.client_id === 'CLIENT001')).to.be.true;",
+                  "});",
+                  "const evt001 = body.items.find(i => i.event_id === 'EVT001');",
+                  "pm.test('fixture EVT001 is visible', () => pm.expect(evt001).to.exist);",
+                  "if (evt001) {",
+                  "  pm.collectionVariables.set('evt001Id', evt001.notification_event_id);",
+                  "  pm.test('EVT001 completed', () => pm.expect(evt001.delivery_status).to.eql('completed'));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-c1-list" }
+            ],
+            "url": "{{baseUrl}}/notification_events?size=20"
+          }
+        },
+        {
+          "name": "CLIENT001 client_id=CLIENT002 is ignored",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('still only CLIENT001', () => {",
+                  "  pm.expect(pm.response.json().items.every(i => i.client_id === 'CLIENT001')).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-c1-ignored-tenant" }
+            ],
+            "url": "{{baseUrl}}/notification_events?client_id=CLIENT002&size=20"
+          }
+        },
+        {
+          "name": "CLIENT001 filter completed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('all completed', () => {",
+                  "  pm.expect(pm.response.json().items.every(i => i.delivery_status === 'completed')).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-c1-completed" }
+            ],
+            "url": "{{baseUrl}}/notification_events?delivery_status=completed&size=20"
+          }
+        },
+        {
+          "name": "CLIENT001 date window (fixture 2024-03-15)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('EVT001 in window', () => {",
+                  "  pm.expect(pm.response.json().items.some(i => i.event_id === 'EVT001')).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-c1-dates" }
+            ],
+            "url": "{{baseUrl}}/notification_events?created_from=2024-03-15T00:00:00Z&created_to=2024-03-16T00:00:00Z&size=20"
+          }
+        },
+        {
+          "name": "Pagination page 0 size 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('size and page echoed', () => {",
+                  "  pm.expect(body.page).to.eql(0);",
+                  "  pm.expect(body.size).to.eql(2);",
+                  "  pm.expect(body.items.length).to.be.at.most(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-c1-page" }
+            ],
+            "url": "{{baseUrl}}/notification_events?page=0&size=2"
+          }
+        },
+        {
+          "name": "Invalid delivery_status → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('invalid_request', () => pm.expect(pm.response.json().code).to.eql('invalid_request'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-bad-status" }
+            ],
+            "url": "{{baseUrl}}/notification_events?delivery_status=done"
+          }
+        },
+        {
+          "name": "size=101 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-size-101" }
+            ],
+            "url": "{{baseUrl}}/notification_events?size=101"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Tenant isolation (404 not 403)",
+      "item": [
+        {
+          "name": "CLIENT002 list (captures EVT003 failed fixture)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('only CLIENT002', () => {",
+                  "  pm.expect(body.items.every(i => i.client_id === 'CLIENT002')).to.be.true;",
+                  "});",
+                  "const evt003 = body.items.find(i => i.event_id === 'EVT003');",
+                  "pm.test('fixture EVT003 is visible', () => pm.expect(evt003).to.exist);",
+                  "if (evt003) pm.collectionVariables.set('evt003Id', evt003.notification_event_id);",
+                  "const failed = body.items.find(i => i.delivery_status === 'failed');",
+                  "if (failed) pm.collectionVariables.set('failedReplayId', failed.notification_event_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client002Key}}" },
+              { "key": "X-Request-Id", "value": "postman-c2-list" }
+            ],
+            "url": "{{baseUrl}}/notification_events?size=20"
+          }
+        },
+        {
+          "name": "CLIENT001 get CLIENT002 EVT003 → 404",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.collectionVariables.get('evt003Id')) {",
+                  "  throw new Error('Run CLIENT002 list first so evt003Id is set');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('404 not 403', () => pm.response.to.have.status(404));",
+                  "pm.test('notification_event_not_found', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('notification_event_not_found');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-bola-get" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{evt003Id}}"
+          }
+        },
+        {
+          "name": "CLIENT001 replay CLIENT002 EVT003 → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('404 not 403', () => pm.response.to.have.status(404));",
+                  "pm.test('notification_event_not_found', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('notification_event_not_found');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-bola-replay" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{evt003Id}}/replay"
+          }
+        },
+        {
+          "name": "Unknown UUID → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('notification_event_not_found', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('notification_event_not_found');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-unknown-id" }
+            ],
+            "url": "{{baseUrl}}/notification_events/00000000-0000-0000-0000-000000000099"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Operator",
+      "item": [
+        {
+          "name": "Operator list all tenants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const ids = new Set(pm.response.json().items.map(i => i.client_id));",
+                  "pm.test('cross-tenant when no client_id', () => {",
+                  "  pm.expect(ids.size).to.be.at.least(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-ops-all" }
+            ],
+            "url": "{{baseUrl}}/notification_events?size=50"
+          }
+        },
+        {
+          "name": "Operator filter CLIENT003 failed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "pm.test('only CLIENT003 failed', () => {",
+                  "  pm.expect(items.every(i => i.client_id === 'CLIENT003' && i.delivery_status === 'failed')).to.be.true;",
+                  "});",
+                  "pm.test('fixture EVT005 or EVT009', () => {",
+                  "  pm.expect(items.some(i => i.event_id === 'EVT005' || i.event_id === 'EVT009')).to.be.true;",
+                  "});",
+                  "if (items[0]) pm.collectionVariables.set('failedReplayId', items[0].notification_event_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-ops-c3-failed" }
+            ],
+            "url": "{{baseUrl}}/notification_events?client_id=CLIENT003&delivery_status=failed&size=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Detail",
+      "item": [
+        {
+          "name": "CLIENT001 get EVT001 (attempts + masked host)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.collectionVariables.get('evt001Id')) {",
+                  "  throw new Error('Run CLIENT001 list first so evt001Id is set');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('EVT001 completed with synthetic attempt', () => {",
+                  "  pm.expect(body.event_id).to.eql('EVT001');",
+                  "  pm.expect(body.delivery_status).to.eql('completed');",
+                  "  pm.expect(body.delivery_attempts.length).to.be.at.least(1);",
+                  "  pm.expect(body.delivery_attempts[0].error_code).to.eql('fixture_synthetic');",
+                  "});",
+                  "pm.test('webhook_url is host-only (no path/query)', () => {",
+                  "  pm.expect(body.webhook_url).to.not.include('/webhook');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-c1-detail" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{evt001Id}}"
+          }
+        },
+        {
+          "name": "Operator get CLIENT002 EVT003 (any status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('cross-tenant get as operator', () => {",
+                  "  pm.expect(body.event_id).to.eql('EVT003');",
+                  "  pm.expect(body.client_id).to.eql('CLIENT002');",
+                  "  pm.expect(body.webhook_url).to.not.include('/webhook');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-ops-evt003" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{evt003Id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Replay (fixture FAILED)",
+      "item": [
+        {
+          "name": "Replay EVT001 completed → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('not_replayable', () => pm.expect(pm.response.json().code).to.eql('not_replayable'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-replay-completed" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{evt001Id}}/replay"
+          }
+        },
+        {
+          "name": "Operator replay first remaining FAILED → 202",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.collectionVariables.get('failedReplayId')) {",
+                  "  throw new Error('Run 03 Operator filter CLIENT003 failed first');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "const body = pm.response.json();",
+                  "pm.test('new cycle queued', () => {",
+                  "  pm.expect(body.delivery_status).to.eql('pending');",
+                  "  pm.expect(body.replay_count).to.be.at.least(1);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-replay-failed" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{failedReplayId}}/replay"
+          }
+        },
+        {
+          "name": "Second replay of the same id while not failed → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('not_replayable until it fails again', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('not_replayable');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-replay-evt003-again" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{failedReplayId}}/replay"
+          }
+        },
+        {
+          "name": "Operator get replayed row (attempt #2 when claimed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('replay_count incremented', () => pm.expect(body.replay_count).to.be.at.least(1));",
+                  "pm.test('status left fixture failed', () => {",
+                  "  pm.expect(['pending', 'processing', 'retrying', 'completed', 'failed']).to.include(body.delivery_status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-evt003-after-replay" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{failedReplayId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 After Kafka jsonl (live delivery)",
+      "item": [
+        {
+          "name": "Find EVT101 (CLIENT001, should complete)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const evt101 = pm.response.json().items.find(i => i.event_id === 'EVT101');",
+                  "pm.test('EVT101 ingested (publish platform-events.jsonl first)', () => pm.expect(evt101).to.exist);",
+                  "if (evt101) {",
+                  "  pm.collectionVariables.set('evt101Id', evt101.notification_event_id);",
+                  "  pm.test('usually completed against /webhook/ok', () => {",
+                  "    pm.expect(['completed', 'pending', 'processing', 'retrying']).to.include(evt101.delivery_status);",
+                  "  });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{client001Key}}" },
+              { "key": "X-Request-Id", "value": "postman-evt101" }
+            ],
+            "url": "{{baseUrl}}/notification_events?size=50"
+          }
+        },
+        {
+          "name": "Find EVT108 (CLIENT002 flaky: retrying then completed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const evt108 = pm.response.json().items.find(i => i.event_id === 'EVT108');",
+                  "pm.test('EVT108 ingested', () => pm.expect(evt108).to.exist);",
+                  "if (evt108) {",
+                  "  pm.collectionVariables.set('evt108Id', evt108.notification_event_id);",
+                  "  pm.test('flaky path: retrying or completed', () => {",
+                  "    pm.expect(['retrying', 'completed', 'pending', 'processing']).to.include(evt108.delivery_status);",
+                  "  });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-evt108" }
+            ],
+            "url": "{{baseUrl}}/notification_events?client_id=CLIENT002&size=20"
+          }
+        },
+        {
+          "name": "Find EVT109 (CLIENT003, wait until failed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const evt109 = pm.response.json().items.find(i => i.event_id === 'EVT109');",
+                  "pm.test('EVT109 ingested', () => pm.expect(evt109).to.exist);",
+                  "if (evt109) {",
+                  "  pm.collectionVariables.set('evt109Id', evt109.notification_event_id);",
+                  "  if (evt109.delivery_status !== 'failed') {",
+                  "    console.warn('EVT109 is ' + evt109.delivery_status + ' — re-run this request after retries exhaust (~1 min)');",
+                  "  }",
+                  "  pm.test('failed after budget (re-run if still retrying)', () => {",
+                  "    pm.expect(evt109.delivery_status).to.eql('failed');",
+                  "  });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-evt109" }
+            ],
+            "url": "{{baseUrl}}/notification_events?client_id=CLIENT003&delivery_status=failed&size=20"
+          }
+        },
+        {
+          "name": "EVT111 loan_disbursement is not created",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('no EVT111 (no subscription)', () => {",
+                  "  pm.expect(pm.response.json().items.some(i => i.event_id === 'EVT111')).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-evt111" }
+            ],
+            "url": "{{baseUrl}}/notification_events?client_id=CLIENT002&size=50"
+          }
+        },
+        {
+          "name": "Get EVT109 attempts then replay",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.collectionVariables.get('evt109Id')) {",
+                  "  throw new Error('Run Find EVT109 first and wait until failed');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('real HTTP attempts, not only fixture', () => {",
+                  "  pm.expect(body.event_id).to.eql('EVT109');",
+                  "  pm.expect(body.attempt_count).to.be.at.least(1);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-evt109-detail" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{evt109Id}}"
+          }
+        },
+        {
+          "name": "Replay EVT109 Kafka failed → 202",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "pm.test('pending new cycle', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.delivery_status).to.eql('pending');",
+                  "  pm.expect(body.replay_count).to.be.at.least(1);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{opsKey}}" },
+              { "key": "X-Request-Id", "value": "postman-replay-evt109" }
+            ],
+            "url": "{{baseUrl}}/notification_events/{{evt109Id}}/replay"
+          }
+        }
+      ]
+    }
+  ]
+}
