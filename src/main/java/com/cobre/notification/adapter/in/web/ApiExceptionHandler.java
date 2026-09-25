@@ -1,5 +1,6 @@
 package com.cobre.notification.adapter.in.web;
 
+import com.cobre.notification.application.InvalidNotificationEventQueryException;
 import com.cobre.notification.application.NotReplayableException;
 import com.cobre.notification.application.NotificationEventNotFoundException;
 import com.cobre.notification.application.SubscriptionInactiveException;
@@ -47,8 +48,8 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 "There is no active subscription for this notification", "subscription_inactive");
     }
 
-    @ExceptionHandler(InvalidRequestException.class)
-    ProblemDetail handleInvalidRequest(InvalidRequestException exception) {
+    @ExceptionHandler({InvalidRequestException.class, InvalidNotificationEventQueryException.class})
+    ProblemDetail handleInvalidRequest(RuntimeException exception) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid request", exception.getMessage(), "invalid_request");
     }
 

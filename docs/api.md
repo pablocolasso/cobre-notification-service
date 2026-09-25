@@ -5,13 +5,18 @@ Base URL: `http://localhost:8080`. Auth: `X-API-Key`. Optional `X-Request-Id` be
 
 Swagger UI: `/swagger-ui/index.html`. Spec: `/v3/api-docs`.
 
-There is no `delivery_date` field. Use `event_created_at`, `last_attempt_at` and `delivered_at`.
+There is no `delivery_date` field. `event_created_at` is the platform `occurred_at` (not Kafka
+ingest time). `last_attempt_at` / `delivered_at` are delivery-clock times.
+
+Ready-made requests: [demo/Cobre-Notification-Service.postman_collection.json](../demo/Cobre-Notification-Service.postman_collection.json).
+How to publish Kafka lines: [README](../README.md#inject-events).
 
 ## `GET /notification_events`
 
 Query: `delivery_status`, `created_from`, `created_to` (inclusive / exclusive ISO-8601 on
-`event_created_at`), `page` (default 0), `size` (default 20, max 100), `client_id` (operator only;
-ignored for client keys).
+`event_created_at`; `created_from` must be strictly before `created_to` or the API returns 400),
+`page` (default 0), `size` (default 20, max 100), `client_id` (operator only; ignored for client
+keys).
 
 Order: `event_created_at DESC, id DESC`.
 

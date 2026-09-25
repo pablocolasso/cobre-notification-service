@@ -58,7 +58,10 @@ class NotificationEventController {
 
     @GetMapping
     @Operation(summary = "List notification events",
-            description = "For a client key the tenant is always the key's client_id; a client_id query parameter is ignored.")
+            description = "Authenticate with the X-API-Key header. For a client key the tenant is always the key's "
+                    + "client_id; a client_id query parameter is ignored.",
+            parameters = @Parameter(name = "X-Request-Id", in = ParameterIn.HEADER, required = false,
+                    description = "Optional correlation id (returned on ProblemDetail as correlation_id)"))
     @ApiResponse(responseCode = "200", description = "Page of notification events",
             content = @Content(examples = @ExampleObject(name = "page", value = """
                     {"items":[{"notification_event_id":"00000000-0000-0000-0000-000000000001",
@@ -69,7 +72,7 @@ class NotificationEventController {
     @ApiResponse(responseCode = "400", description = "Invalid query", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "401", description = "Missing or invalid API key", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     PageResponse<NotificationEventResponse> list(
-            Requester requester,
+            @Parameter(hidden = true) Requester requester,
             @CorrelationId String correlationId,
             @Parameter(description = "Ignored for client keys; optional tenant filter for operators")
             @RequestParam(name = "client_id", required = false) String clientId,
@@ -88,7 +91,10 @@ class NotificationEventController {
     }
 
     @GetMapping("/{notification_event_id}")
-    @Operation(summary = "Get a notification event and its attempts")
+    @Operation(summary = "Get a notification event and its attempts",
+            description = "Authenticate with the X-API-Key header. Cross-tenant ids return 404.",
+            parameters = @Parameter(name = "X-Request-Id", in = ParameterIn.HEADER, required = false,
+                    description = "Optional correlation id (returned on ProblemDetail as correlation_id)"))
     @ApiResponse(responseCode = "200", description = "Notification event",
             content = @Content(examples = @ExampleObject(name = "detail", value = """
                     {"notification_event_id":"00000000-0000-0000-0000-000000000001",
@@ -100,7 +106,7 @@ class NotificationEventController {
     @ApiResponse(responseCode = "401", description = "Missing or invalid API key", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "404", description = "Unknown or not visible", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     NotificationEventDetailsResponse get(
-            Requester requester,
+            @Parameter(hidden = true) Requester requester,
             @CorrelationId String correlationId,
             @Parameter(in = ParameterIn.PATH) @PathVariable("notification_event_id") UUID notificationEventId) {
         return NotificationEventDetailsResponse.from(
@@ -109,7 +115,10 @@ class NotificationEventController {
 
     @PostMapping("/{notification_event_id}/replay")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    @Operation(summary = "Replay a failed notification")
+    @Operation(summary = "Replay a failed notification",
+            description = "Authenticate with the X-API-Key header. Only failed notifications can be replayed.",
+            parameters = @Parameter(name = "X-Request-Id", in = ParameterIn.HEADER, required = false,
+                    description = "Optional correlation id (returned on ProblemDetail as correlation_id)"))
     @ApiResponse(responseCode = "202", description = "Queued for a new delivery cycle",
             content = @Content(examples = @ExampleObject(name = "replayed", value = """
                     {"notification_event_id":"00000000-0000-0000-0000-000000000109",
@@ -120,7 +129,7 @@ class NotificationEventController {
     @ApiResponse(responseCode = "409", description = "Not failed, or no active subscription",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     NotificationEventDetailsResponse replay(
-            Requester requester,
+            @Parameter(hidden = true) Requester requester,
             @CorrelationId String correlationId,
             @PathVariable("notification_event_id") UUID notificationEventId) {
         return NotificationEventDetailsResponse.from(

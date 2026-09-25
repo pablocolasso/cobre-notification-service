@@ -167,6 +167,35 @@ class NotificationEventControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void rejectsInvertedAndEqualCreatedWindow() throws Exception {
+        mockMvc.perform(get("/notification_events").header("X-API-Key", CLIENT_001)
+                        .param("created_from", "2025-03-15T00:00:00Z")
+                        .param("created_to", "2024-03-16T00:00:00Z"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("invalid_request"))
+                .andExpect(jsonPath("$.detail").value("created_from must be before created_to"));
+        mockMvc.perform(get("/notification_events").header("X-API-Key", CLIENT_001)
+                        .param("created_from", "2024-03-16T00:00:00Z")
+                        .param("created_to", "2024-03-16T00:00:00Z"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("invalid_request"));
+    }
+
+    @Test
+    void rejectsMalformedCreatedInstantAndUnknownDeliveryStatus() throws Exception {
+        mockMvc.perform(get("/notification_events").header("X-API-Key", CLIENT_001)
+                        .param("created_from", "not-an-instant"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("invalid_request"));
+        mockMvc.perform(get("/notification_events").header("X-API-Key", CLIENT_001)
+                        .param("delivery_status", "done"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("invalid_request"));
+    }
+
+    @Test
     void returnsDetailsWithAttemptsAndMaskedWebhookUrl() throws Exception {
         mockMvc.perform(get("/notification_events/{id}", OTHER_CLIENT_ID).header("X-API-Key", CLIENT_002))
                 .andExpect(status().isOk())

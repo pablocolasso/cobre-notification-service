@@ -1,7 +1,9 @@
 # Observability
 
 Management port: `8081` (`MANAGEMENT_PORT`). Compose publishes it for local/demo only. Do not expose
-that port on a public network.
+that port on a public network. No `X-API-Key` (the filter only covers `/notification_events/**`).
+
+Postman: [demo/Cobre-Notification-Observability.postman_collection.json](../demo/Cobre-Notification-Observability.postman_collection.json).
 
 | Endpoint | Purpose |
 |---|---|

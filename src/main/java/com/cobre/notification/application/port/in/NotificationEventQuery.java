@@ -1,5 +1,6 @@
 package com.cobre.notification.application.port.in;
 
+import com.cobre.notification.application.InvalidNotificationEventQueryException;
 import com.cobre.notification.domain.model.DeliveryStatus;
 
 import java.time.Instant;
@@ -20,13 +21,13 @@ public record NotificationEventQuery(
 
     public NotificationEventQuery {
         if (page < 0) {
-            throw new IllegalArgumentException("page must be >= 0");
+            throw new InvalidNotificationEventQueryException("page must be >= 0");
         }
         if (size < 1 || size > MAX_PAGE_SIZE) {
-            throw new IllegalArgumentException("size must be between 1 and " + MAX_PAGE_SIZE);
+            throw new InvalidNotificationEventQueryException("size must be between 1 and " + MAX_PAGE_SIZE);
         }
-        if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
-            throw new IllegalArgumentException("created_from must be before created_to");
+        if (createdFrom != null && createdTo != null && !createdFrom.isBefore(createdTo)) {
+            throw new InvalidNotificationEventQueryException("created_from must be before created_to");
         }
     }
 
