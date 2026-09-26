@@ -33,9 +33,13 @@ does not pick up Java changes.
 docker compose up --build --wait
 ```
 
-Profiles on `app`: `local,demo`. On boot the demo seeder upserts subscriptions and loads the
-fixture `EVT001`–`EVT010` (historical rows, `origin=FIXTURE`). Kafka is **not** required to list
-those.
+Profiles on `app`: `local,demo`. On boot the demo seeder upserts subscriptions and inserts
+`EVT001`–`EVT010` as **already-finished history** (`origin=FIXTURE`). Each fixture writes
+**both** `notification_events` and a matching `delivery_attempts` row (`SUCCESS` or
+`PERMANENT_FAILURE`, error `fixture_synthetic`) so list/get look consistent. Status comes
+from the JSON (`completed` / `failed`); there is no Kafka ingest, no webhook call, no worker.
+Actuator delivery/ingest metrics stay empty until you publish live events. Replay works on
+the failed fixtures. Kafka is **not** required for that.
 
 ### API keys (`X-API-Key`)
 
@@ -51,10 +55,14 @@ For a **client** key, `?client_id=` is **ignored** (200, own tenant). Cross-tena
 
 ## Inject events
 
+Optional. Use this only to load **more** events after the fixture. The worker then delivers them
+live (ok / flaky / fail).
+
 Lines are `client_id|{json}`. The JSON must include `event_id`, `event_type`, `client_id`,
-`occurred_at`, `content`, `schema_version`. **`event_id` is globally unique**; republishing the
-same id is a no-op. To run the file again, change the ids (e.g. `BEVT101`) and **save the file**
-before publishing — the script reads disk, not an unsaved editor buffer.
+`occurred_at`, `content`, `schema_version`. **`event_id` is globally unique**; publishing an id
+that already exists is a no-op (including the fixture `EVT001`–`EVT010`). To publish again,
+change the ids (e.g. `EVT101`) and **save the file** first — the script reads disk, not an
+unsaved editor buffer.
 
 `event_created_at` in the API is **`occurred_at` from the payload** (when the business event
 happened), not ingest time. `last_attempt_at` / `delivered_at` are when the worker called the

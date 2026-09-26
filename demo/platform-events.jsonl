@@ -1,12 +1,12 @@
-CLIENT001|{"schema_version":1,"event_id":"BEVT101","event_type":"credit_card_payment","client_id":"CLIENT001","occurred_at":"2026-09-23T09:30:22Z","content":"Credit card payment received for $150.00"}
-CLIENT001|{"schema_version":1,"event_id":"BEVT102","event_type":"debit_card_withdrawal","client_id":"CLIENT001","occurred_at":"2026-09-23T10:15:45Z","content":"ATM withdrawal of $200.00"}
-CLIENT002|{"schema_version":1,"event_id":"BEVT103","event_type":"credit_transfer","client_id":"CLIENT002","occurred_at":"2026-09-23T11:20:18Z","content":"Bank transfer received from Account #4567 for $1,500.00"}
-CLIENT002|{"schema_version":1,"event_id":"BEVT104","event_type":"debit_automatic_payment","client_id":"CLIENT002","occurred_at":"2026-09-23T12:05:33Z","content":"Monthly utility bill payment of $85.50"}
-CLIENT003|{"schema_version":1,"event_id":"BEVT105","event_type":"credit_refund","client_id":"CLIENT003","occurred_at":"2026-09-23T13:45:10Z","content":"Refund processed for order #789 for $45.99"}
-CLIENT003|{"schema_version":1,"event_id":"BEVT106","event_type":"debit_transfer","client_id":"CLIENT003","occurred_at":"2026-09-23T14:30:55Z","content":"Money transfer sent to Account #8901 for $500.00"}
-CLIENT001|{"schema_version":1,"event_id":"BEVT107","event_type":"credit_deposit","client_id":"CLIENT001","occurred_at":"2026-09-23T15:20:40Z","content":"Direct deposit received from Employer XYZ for $2,500.00"}
-CLIENT002|{"schema_version":1,"event_id":"BEVT108","event_type":"debit_purchase","client_id":"CLIENT002","occurred_at":"2026-09-23T16:10:15Z","content":"Point of sale purchase at Store ABC for $75.25"}
-CLIENT003|{"schema_version":1,"event_id":"BEVT109","event_type":"credit_cashback","client_id":"CLIENT003","occurred_at":"2026-09-23T17:25:30Z","content":"Cashback reward credited for $25.00"}
-CLIENT001|{"schema_version":1,"event_id":"BEVT110","event_type":"debit_subscription","client_id":"CLIENT001","occurred_at":"2026-09-23T18:05:12Z","content":"Monthly streaming service payment of $14.99"}
-CLIENT001|{"schema_version":1,"event_id":"BEVT101","event_type":"credit_card_payment","client_id":"CLIENT001","occurred_at":"2026-09-23T09:30:22Z","content":"Credit card payment received for $150.00"}
-CLIENT002|{"schema_version":1,"event_id":"BEVT111","event_type":"loan_disbursement","client_id":"CLIENT002","occurred_at":"2026-09-23T18:30:00Z","content":"Loan disbursed for $10,000.00"}
+CLIENT001|{"schema_version":1,"event_id":"EVT101","event_type":"credit_card_payment","client_id":"CLIENT001","occurred_at":"2026-09-23T09:30:22Z","content":"Credit card payment received for $150.00"}
+CLIENT001|{"schema_version":1,"event_id":"EVT102","event_type":"debit_card_withdrawal","client_id":"CLIENT001","occurred_at":"2026-09-23T10:15:45Z","content":"ATM withdrawal of $200.00"}
+CLIENT002|{"schema_version":1,"event_id":"EVT103","event_type":"credit_transfer","client_id":"CLIENT002","occurred_at":"2026-09-23T11:20:18Z","content":"Bank transfer received from Account #4567 for $1,500.00"}
+CLIENT002|{"schema_version":1,"event_id":"EVT104","event_type":"debit_automatic_payment","client_id":"CLIENT002","occurred_at":"2026-09-23T12:05:33Z","content":"Monthly utility bill payment of $85.50"}
+CLIENT003|{"schema_version":1,"event_id":"EVT105","event_type":"credit_refund","client_id":"CLIENT003","occurred_at":"2026-09-23T13:45:10Z","content":"Refund processed for order #789 for $45.99"}
+CLIENT003|{"schema_version":1,"event_id":"EVT106","event_type":"debit_transfer","client_id":"CLIENT003","occurred_at":"2026-09-23T14:30:55Z","content":"Money transfer sent to Account #8901 for $500.00"}
+CLIENT001|{"schema_version":1,"event_id":"EVT107","event_type":"credit_deposit","client_id":"CLIENT001","occurred_at":"2026-09-23T15:20:40Z","content":"Direct deposit received from Employer XYZ for $2,500.00"}
+CLIENT002|{"schema_version":1,"event_id":"EVT108","event_type":"debit_purchase","client_id":"CLIENT002","occurred_at":"2026-09-23T16:10:15Z","content":"Point of sale purchase at Store ABC for $75.25"}
+CLIENT003|{"schema_version":1,"event_id":"EVT109","event_type":"credit_cashback","client_id":"CLIENT003","occurred_at":"2026-09-23T17:25:30Z","content":"Cashback reward credited for $25.00"}
+CLIENT001|{"schema_version":1,"event_id":"EVT110","event_type":"debit_subscription","client_id":"CLIENT001","occurred_at":"2026-09-23T18:05:12Z","content":"Monthly streaming service payment of $14.99"}
+CLIENT001|{"schema_version":1,"event_id":"EVT101","event_type":"credit_card_payment","client_id":"CLIENT001","occurred_at":"2026-09-23T09:30:22Z","content":"Credit card payment received for $150.00"}
+CLIENT002|{"schema_version":1,"event_id":"EVT111","event_type":"loan_disbursement","client_id":"CLIENT002","occurred_at":"2026-09-23T18:30:00Z","content":"Loan disbursed for $10,000.00"}
