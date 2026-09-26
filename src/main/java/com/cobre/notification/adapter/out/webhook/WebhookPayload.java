@@ -26,4 +26,9 @@ record WebhookPayload(
                 task.eventCreatedAt(),
                 task.content());
     }
+
+    @Override
+    public String toString() {
+        return "WebhookPayload[notificationEventId=%s, eventId=%s, eventType=%s, clientId=%s, occurredAt=%s]".formatted(notificationEventId, eventId, eventType, clientId, occurredAt);
+    }
 }

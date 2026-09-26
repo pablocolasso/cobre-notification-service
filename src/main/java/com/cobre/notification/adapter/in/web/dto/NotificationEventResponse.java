@@ -36,4 +36,9 @@ public record NotificationEventResponse(
                 notification.attemptCount(),
                 notification.nextAttemptAt());
     }
+
+    @Override
+    public String toString() {
+        return "NotificationEventResponse[notificationEventId=%s, eventId=%s, clientId=%s, eventType=%s, deliveryStatus=%s, eventCreatedAt=%s, lastAttemptAt=%s, deliveredAt=%s, attemptCount=%s, nextAttemptAt=%s]".formatted(notificationEventId, eventId, clientId, eventType, deliveryStatus, eventCreatedAt, lastAttemptAt, deliveredAt, attemptCount, nextAttemptAt);
+    }
 }

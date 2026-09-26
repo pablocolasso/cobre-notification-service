@@ -50,4 +50,9 @@ public record NotificationEventDetailsResponse(
                 notification.lastError(),
                 details.attempts().stream().map(DeliveryAttemptResponse::from).toList());
     }
+
+    @Override
+    public String toString() {
+        return "NotificationEventDetailsResponse[notificationEventId=%s, eventId=%s, clientId=%s, eventType=%s, deliveryStatus=%s, eventCreatedAt=%s, lastAttemptAt=%s, deliveredAt=%s, attemptCount=%s, nextAttemptAt=%s, webhookUrl=%s, replayCount=%s, lastError=%s, deliveryAttempts=%s]".formatted(notificationEventId, eventId, clientId, eventType, deliveryStatus, eventCreatedAt, lastAttemptAt, deliveredAt, attemptCount, nextAttemptAt, webhookUrl, replayCount, lastError, deliveryAttempts);
+    }
 }

@@ -12,4 +12,9 @@ record PlatformEventMessage(
         @JsonProperty("client_id") String clientId,
         @JsonProperty("occurred_at") String occurredAt,
         @JsonProperty("content") String content) {
+
+    @Override
+    public String toString() {
+        return "PlatformEventMessage[schemaVersion=%s, eventId=%s, eventType=%s, clientId=%s, occurredAt=%s]".formatted(schemaVersion, eventId, eventType, clientId, occurredAt);
+    }
 }

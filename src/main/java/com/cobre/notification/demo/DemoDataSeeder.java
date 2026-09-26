@@ -144,5 +144,10 @@ class DemoDataSeeder implements ApplicationRunner {
             Instant deliveryDate,
             String deliveryStatus,
             String clientId) {
+
+        @Override
+        public String toString() {
+            return "FixtureEvent[eventId=%s, eventType=%s, deliveryDate=%s, deliveryStatus=%s, clientId=%s]".formatted(eventId, eventType, deliveryDate, deliveryStatus, clientId);
+        }
     }
 }
