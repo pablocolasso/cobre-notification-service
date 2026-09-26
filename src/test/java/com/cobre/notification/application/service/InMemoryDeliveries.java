@@ -23,10 +23,13 @@ final class InMemoryDeliveries implements DeliveryRepository {
     final List<DeliveryCompletion> completions = new CopyOnWriteArrayList<>();
     final List<ExpiredLease> expired = new ArrayList<>();
     final List<LeaseRecovery> recoveries = new ArrayList<>();
+    final List<RevertedClaim> reverts = new ArrayList<>();
     boolean leaseLost;
     boolean recoveryLost;
+    boolean revertLost;
     RuntimeException recordFailure;
     RuntimeException claimFailure;
+    RuntimeException revertFailure;
 
     DeliveryTask addDueTask() {
         return addDueTask(1);
@@ -52,10 +55,20 @@ final class InMemoryDeliveries implements DeliveryRepository {
             claimed.add(new DeliveryTask(task.notificationEventId(), request.attemptIds().get(i),
                     task.attemptNumber(), task.cycleAttemptNumber(), task.trigger(), task.eventId(),
                     task.clientId(), task.eventType(), task.content(), task.eventCreatedAt(), task.webhookUrl(),
-                    request.now()));
+                    request.now(), task.signingSecret(), task.nextAttemptAtBeforeClaim(),
+                    task.lastAttemptAtBeforeClaim()));
         }
         due.subList(0, claimed.size()).clear();
         return claimed;
+    }
+
+    @Override
+    public boolean revertClaim(DeliveryTask task, String workerId, Instant now) {
+        if (revertFailure != null) {
+            throw revertFailure;
+        }
+        reverts.add(new RevertedClaim(task, workerId, now));
+        return !revertLost;
     }
 
     @Override
@@ -76,5 +89,8 @@ final class InMemoryDeliveries implements DeliveryRepository {
     public boolean recoverLease(LeaseRecovery recovery) {
         recoveries.add(recovery);
         return !recoveryLost;
+    }
+
+    record RevertedClaim(DeliveryTask task, String workerId, Instant now) {
     }
 }

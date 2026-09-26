@@ -146,6 +146,15 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
         Instant now = request.now();
         return transactionTemplate.execute(status -> {
             List<ClaimedRow> rows = jdbcClient.sql("""
+                            WITH due AS (
+                                SELECT id, next_attempt_at, last_attempt_at
+                                FROM notification_events
+                                WHERE delivery_status IN ('PENDING', 'RETRYING')
+                                  AND next_attempt_at <= :now
+                                ORDER BY next_attempt_at, id
+                                LIMIT :limit
+                                FOR UPDATE SKIP LOCKED
+                            )
                             UPDATE notification_events n
                             SET delivery_status     = 'PROCESSING',
                                 locked_by           = :workerId,
@@ -155,15 +164,12 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                                 next_attempt_at     = NULL,
                                 last_attempt_at     = :now,
                                 updated_at          = :now
-                            WHERE n.id IN (SELECT id
-                                           FROM notification_events
-                                           WHERE delivery_status IN ('PENDING', 'RETRYING')
-                                             AND next_attempt_at <= :now
-                                           ORDER BY next_attempt_at, id
-                                           LIMIT :limit
-                                           FOR UPDATE SKIP LOCKED)
+                            FROM due
+                            WHERE n.id = due.id
                             RETURNING n.id, n.event_id, n.client_id, n.event_type, n.content, n.event_created_at,
                                       n.webhook_url, n.attempt_count, n.cycle_attempt_count, n.replay_count,
+                                      due.next_attempt_at AS previous_next_attempt_at,
+                                      due.last_attempt_at AS previous_last_attempt_at,
                                       (SELECT s.signing_secret FROM subscriptions s
                                        WHERE s.client_id = n.client_id AND s.event_type = n.event_type AND s.active
                                        LIMIT 1) AS signing_secret
@@ -240,6 +246,65 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
             return true;
         });
         return Boolean.TRUE.equals(recorded);
+    }
+
+    @Override
+    public boolean revertClaim(DeliveryTask task, String workerId, Instant now) {
+        Boolean reverted = transactionTemplate.execute(status -> {
+            int updated = jdbcClient.sql("""
+                            UPDATE notification_events
+                            SET delivery_status     = :status,
+                                attempt_count       = attempt_count - 1,
+                                cycle_attempt_count = cycle_attempt_count - 1,
+                                next_attempt_at     = :nextAttemptAt,
+                                last_attempt_at     = :lastAttemptAt,
+                                locked_by           = NULL,
+                                locked_until        = NULL,
+                                updated_at          = :now
+                            WHERE id = :id
+                              AND delivery_status = 'PROCESSING'
+                              AND locked_by = :workerId
+                              AND attempt_count = :attemptNumber
+                              AND cycle_attempt_count = :cycleAttemptNumber
+                            """)
+                    .param("status", statusBeforeClaim(task))
+                    .param("nextAttemptAt", toTimestamp(task.nextAttemptAtBeforeClaim()))
+                    .param("lastAttemptAt", toTimestamp(task.lastAttemptAtBeforeClaim()))
+                    .param("now", toTimestamp(now))
+                    .param("id", task.notificationEventId())
+                    .param("workerId", workerId)
+                    .param("attemptNumber", task.attemptNumber())
+                    .param("cycleAttemptNumber", task.cycleAttemptNumber())
+                    .update();
+            if (updated == 0) {
+                return false;
+            }
+            int deleted = jdbcClient.sql("""
+                            DELETE FROM delivery_attempts
+                            WHERE id = :attemptId
+                              AND notification_event_id = :notificationEventId
+                              AND attempt_number = :attemptNumber
+                              AND status = 'IN_PROGRESS'
+                            """)
+                    .param("attemptId", task.attemptId())
+                    .param("notificationEventId", task.notificationEventId())
+                    .param("attemptNumber", task.attemptNumber())
+                    .update();
+            if (deleted == 0) {
+                status.setRollbackOnly();
+                return false;
+            }
+            return true;
+        });
+        return Boolean.TRUE.equals(reverted);
+    }
+
+    /**
+     * A claim moves PENDING (cycle still 0, including a replay) or RETRYING (cycle already started) to PROCESSING
+     * and increments the cycle counter. The value on the task is the count after that increment.
+     */
+    private static String statusBeforeClaim(DeliveryTask task) {
+        return task.cycleAttemptNumber() == 1 ? "PENDING" : "RETRYING";
     }
 
     @Override
@@ -393,17 +458,21 @@ class NotificationEventPersistenceAdapter implements NotificationEventRepository
                 rs.getString("content"),
                 toInstant(rs.getTimestamp("event_created_at")),
                 rs.getString("webhook_url"),
-                rs.getString("signing_secret"));
+                rs.getString("signing_secret"),
+                toInstant(rs.getTimestamp("previous_next_attempt_at")),
+                toInstant(rs.getTimestamp("previous_last_attempt_at")));
     }
 
     private record ClaimedRow(UUID id, int attemptCount, int cycleAttemptCount, int replayCount, String eventId,
                               String clientId, String eventType, String content, Instant eventCreatedAt,
-                              String webhookUrl, String signingSecret) {
+                              String webhookUrl, String signingSecret, Instant previousNextAttemptAt,
+                              Instant previousLastAttemptAt) {
 
         DeliveryTask toTask(UUID attemptId, Instant claimedAt) {
             return new DeliveryTask(id, attemptId, attemptCount, cycleAttemptCount,
                     AttemptTrigger.of(cycleAttemptCount, replayCount), eventId, clientId, eventType, content,
-                    eventCreatedAt, webhookUrl, claimedAt, signingSecret);
+                    eventCreatedAt, webhookUrl, claimedAt, signingSecret, previousNextAttemptAt,
+                    previousLastAttemptAt);
         }
 
         @Override

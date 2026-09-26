@@ -19,7 +19,9 @@ public record DeliveryTask(
         Instant eventCreatedAt,
         String webhookUrl,
         Instant claimedAt,
-        String signingSecret) {
+        String signingSecret,
+        Instant nextAttemptAtBeforeClaim,
+        Instant lastAttemptAtBeforeClaim) {
 
     public DeliveryTask(
             UUID notificationEventId,
@@ -35,7 +37,25 @@ public record DeliveryTask(
             String webhookUrl,
             Instant claimedAt) {
         this(notificationEventId, attemptId, attemptNumber, cycleAttemptNumber, trigger, eventId, clientId, eventType,
-                content, eventCreatedAt, webhookUrl, claimedAt, null);
+                content, eventCreatedAt, webhookUrl, claimedAt, null, null, null);
+    }
+
+    public DeliveryTask(
+            UUID notificationEventId,
+            UUID attemptId,
+            int attemptNumber,
+            int cycleAttemptNumber,
+            AttemptTrigger trigger,
+            String eventId,
+            String clientId,
+            String eventType,
+            String content,
+            Instant eventCreatedAt,
+            String webhookUrl,
+            Instant claimedAt,
+            String signingSecret) {
+        this(notificationEventId, attemptId, attemptNumber, cycleAttemptNumber, trigger, eventId, clientId, eventType,
+                content, eventCreatedAt, webhookUrl, claimedAt, signingSecret, null, null);
     }
 
     @Override

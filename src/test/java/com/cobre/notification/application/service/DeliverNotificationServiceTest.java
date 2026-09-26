@@ -102,6 +102,23 @@ class DeliverNotificationServiceTest {
         assertThat(rejecting.deliverDueNotifications()).isEqualTo(1);
         assertThat(rejecting.availableSlots()).isEqualTo(MAX_CONCURRENCY);
         assertThat(deliveries.completions).isEmpty();
+        assertThat(deliveries.reverts).singleElement().satisfies(revert -> {
+            assertThat(revert.workerId()).isEqualTo(WORKER_ID);
+            assertThat(revert.now()).isEqualTo(NOW);
+            assertThat(revert.task().attemptId()).isNotNull();
+        });
+    }
+
+    @Test
+    void rejectedTaskReleasesItsSlotWhenTheRevertFails() {
+        deliveries.addDueTask();
+        deliveries.revertFailure = new IllegalStateException("database down");
+        var rejecting = service(command -> {
+            throw new RejectedExecutionException("shutting down");
+        });
+
+        assertThat(rejecting.deliverDueNotifications()).isEqualTo(1);
+        assertThat(rejecting.availableSlots()).isEqualTo(MAX_CONCURRENCY);
     }
 
     @Test

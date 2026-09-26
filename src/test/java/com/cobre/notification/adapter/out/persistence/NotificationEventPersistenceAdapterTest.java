@@ -91,6 +91,75 @@ class NotificationEventPersistenceAdapterTest extends AbstractIntegrationTest {
         assertThat(attempt.get("status")).isEqualTo("IN_PROGRESS");
         assertThat(attempt.get("attempt_number")).isEqualTo(1);
         assertThat(attempt.get("attempt_trigger")).isEqualTo("INITIAL");
+        assertThat(tasks.getFirst().nextAttemptAtBeforeClaim()).isEqualTo(NOW);
+        assertThat(tasks.getFirst().lastAttemptAtBeforeClaim()).isNull();
+    }
+
+    @Test
+    void revertClaimRestoresTheRowAndDeletesTheInProgressAttempt() {
+        notifications.saveIfAbsent(pending("EVT-REVERT", NOW.minusSeconds(5)));
+        DeliveryTask task = claim("worker-1", 1, NOW).getFirst();
+        Instant revertedAt = NOW.plusSeconds(1);
+
+        assertThat(deliveries.revertClaim(task, "worker-1", revertedAt)).isTrue();
+
+        Map<String, Object> row = notificationRow(task.notificationEventId());
+        assertThat(row.get("delivery_status")).isEqualTo("PENDING");
+        assertThat(row.get("attempt_count")).isEqualTo(0);
+        assertThat(row.get("cycle_attempt_count")).isEqualTo(0);
+        assertThat(toInstant(row.get("next_attempt_at"))).isEqualTo(NOW.minusSeconds(5));
+        assertThat(row.get("last_attempt_at")).isNull();
+        assertThat(row.get("locked_by")).isNull();
+        assertThat(row.get("locked_until")).isNull();
+        assertThat(toInstant(row.get("updated_at"))).isEqualTo(revertedAt);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM delivery_attempts WHERE notification_event_id = :id")
+                .param("id", task.notificationEventId()).query(Long.class).single()).isZero();
+
+        DeliveryTask again = claim("worker-1", 1, NOW).getFirst();
+        assertThat(again.attemptNumber()).isEqualTo(1);
+        assertThat(again.cycleAttemptNumber()).isEqualTo(1);
+    }
+
+    @Test
+    void revertClaimOfARetryRestoresRetryingAndThePreviousSchedule() {
+        notifications.saveIfAbsent(pending("EVT-REVERT-RETRY", NOW));
+        DeliveryTask first = claim("worker-1", 1, NOW).getFirst();
+        Instant retryAt = NOW.plusSeconds(5);
+        deliveries.recordResult(completion(first, "worker-1", new DeliveryDecision(DeliveryStatus.RETRYING,
+                AttemptStatus.RETRYABLE_FAILURE, DeliveryError.httpStatus(503), DeliveryError.httpStatus(503), null,
+                retryAt), 503, NOW.plusSeconds(1)));
+
+        DeliveryTask second = claim("worker-1", 1, retryAt).getFirst();
+        assertThat(second.nextAttemptAtBeforeClaim()).isEqualTo(retryAt);
+        assertThat(second.lastAttemptAtBeforeClaim()).isEqualTo(NOW);
+        Instant revertedAt = retryAt.plusSeconds(1);
+
+        assertThat(deliveries.revertClaim(second, "worker-1", revertedAt)).isTrue();
+
+        Map<String, Object> row = notificationRow(first.notificationEventId());
+        assertThat(row.get("delivery_status")).isEqualTo("RETRYING");
+        assertThat(row.get("attempt_count")).isEqualTo(1);
+        assertThat(row.get("cycle_attempt_count")).isEqualTo(1);
+        assertThat(toInstant(row.get("next_attempt_at"))).isEqualTo(retryAt);
+        assertThat(toInstant(row.get("last_attempt_at"))).isEqualTo(NOW);
+        assertThat(row.get("locked_by")).isNull();
+        assertThat(toInstant(row.get("updated_at"))).isEqualTo(revertedAt);
+        assertThat(attemptRow(first.attemptId()).get("status")).isEqualTo("RETRYABLE_FAILURE");
+        assertThat(jdbcClient.sql("SELECT count(*) FROM delivery_attempts WHERE id = :id")
+                .param("id", second.attemptId()).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void revertClaimDoesNothingWhenTheLeaseIsNoLongerHeld() {
+        notifications.saveIfAbsent(pending("EVT-REVERT-LOST", NOW));
+        DeliveryTask task = claim("worker-1", 1, NOW).getFirst();
+        Instant completedAt = NOW.plusMillis(250);
+        deliveries.recordResult(completion(task, "worker-1", new DeliveryDecision(
+                DeliveryStatus.COMPLETED, AttemptStatus.SUCCESS, null, null, completedAt, null), 200, completedAt));
+
+        assertThat(deliveries.revertClaim(task, "worker-1", NOW.plusSeconds(2))).isFalse();
+        assertThat(notificationRow(task.notificationEventId()).get("delivery_status")).isEqualTo("COMPLETED");
+        assertThat(attemptRow(task.attemptId()).get("status")).isEqualTo("SUCCESS");
     }
 
     @Test

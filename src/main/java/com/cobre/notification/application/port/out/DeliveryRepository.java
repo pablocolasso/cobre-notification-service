@@ -14,6 +14,14 @@ public interface DeliveryRepository {
     List<DeliveryTask> claimDue(ClaimRequest request);
 
     /**
+     * Undoes a claim whose task never started, in one short transaction: deletes the in-progress attempt and restores
+     * the notification to the state it had before the claim.
+     *
+     * @return {@code false} when this worker no longer holds that attempt; nothing is written in that case.
+     */
+    boolean revertClaim(DeliveryTask task, String workerId, Instant now);
+
+    /**
      * @return {@code false} if the lease was lost (expired and recovered, or taken by another attempt); nothing is
      * written in that case.
      */

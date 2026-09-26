@@ -95,14 +95,39 @@ public class DeliverNotificationService implements DeliverDueNotificationsUseCas
             });
         } catch (RejectedExecutionException e) {
             slots.release();
-            log.atWarn()
-                    .setMessage("Delivery rejected by the executor; lease recovery will retry it")
-                    .addKeyValue("notification_event_id", task.notificationEventId())
-                    .addKeyValue("event_id", task.eventId())
-                    .addKeyValue("client_id", task.clientId())
-                    .addKeyValue("attempt_number", task.attemptNumber())
-                    .log();
+            revertRejectedClaim(task);
         }
+    }
+
+    private void revertRejectedClaim(DeliveryTask task) {
+        try {
+            if (deliveries.revertClaim(task, workerId, clock.instant())) {
+                log.atWarn()
+                        .setMessage("Delivery rejected by the executor; the claim was reverted")
+                        .addKeyValue("notification_event_id", task.notificationEventId())
+                        .addKeyValue("event_id", task.eventId())
+                        .addKeyValue("client_id", task.clientId())
+                        .addKeyValue("attempt_number", task.attemptNumber())
+                        .log();
+                return;
+            }
+            logRejectedClaimNotReverted(task, null);
+        } catch (RuntimeException e) {
+            logRejectedClaimNotReverted(task, e);
+        }
+    }
+
+    private static void logRejectedClaimNotReverted(DeliveryTask task, RuntimeException error) {
+        var event = log.atError()
+                .setMessage("Could not revert a rejected claim; lease recovery will retry it")
+                .addKeyValue("notification_event_id", task.notificationEventId())
+                .addKeyValue("event_id", task.eventId())
+                .addKeyValue("client_id", task.clientId())
+                .addKeyValue("attempt_number", task.attemptNumber());
+        if (error != null) {
+            event.addKeyValue("error_type", error.getClass().getSimpleName());
+        }
+        event.log();
     }
 
     private List<UUID> newIds(int count) {
