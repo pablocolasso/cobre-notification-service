@@ -59,8 +59,8 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @ExceptionHandler({DataAccessException.class, CannotCreateTransactionException.class})
-    ProblemDetail handleUnavailable() {
-        log.warn("Database unavailable while handling an API request");
+    ProblemDetail handleUnavailable(RuntimeException exception) {
+        log.warn("Database unavailable while handling an API request", exception);
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable",
                 "The service is temporarily unavailable", "service_unavailable");
     }

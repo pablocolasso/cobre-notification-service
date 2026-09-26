@@ -144,6 +144,12 @@ public class DeliveryAttemptProcessor {
         try {
             return webhookClient.deliver(task);
         } catch (RuntimeException e) {
+            log.atError()
+                    .setMessage("Unexpected webhook client failure")
+                    .addKeyValue("notification_event_id", task.notificationEventId())
+                    .addKeyValue("error_type", e.getClass().getSimpleName())
+                    .setCause(e)
+                    .log();
             return new TransportFailure(new DeliveryError("unexpected_error", e.getClass().getSimpleName()));
         }
     }
