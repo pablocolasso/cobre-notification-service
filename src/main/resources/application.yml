@@ -14,6 +14,7 @@ spring:
           time_zone: UTC
   datasource:
     hikari:
+      maximum-pool-size: 30
       data-source-properties:
         # Otherwise PostgreSQL errors quote the failing row ("Failing row contains ..."), content included.
         logServerErrorDetail: false
