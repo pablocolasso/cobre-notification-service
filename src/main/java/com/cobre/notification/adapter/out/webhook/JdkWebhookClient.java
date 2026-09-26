@@ -23,6 +23,8 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Redirects are never followed: a redirect could point the request at an internal address. HTTP/1.1 is forced so
@@ -38,6 +40,7 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
     static final String DELIVERY_ATTEMPT_HEADER = "X-Cobre-Delivery-Attempt";
 
     private final HttpClient httpClient;
+    private final ExecutorService httpExecutor;
     private final JsonMapper jsonMapper;
     private final Duration connectTimeout;
     private final Duration requestTimeout;
@@ -53,10 +56,12 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
         this.destinationGuard = destinationGuard;
         this.signer = signer;
         this.clock = clock;
+        this.httpExecutor = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("webhook-http-", 0).factory());
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(connectTimeout)
                 .followRedirects(HttpClient.Redirect.NEVER)
+                .executor(httpExecutor)
                 .build();
     }
 
@@ -115,6 +120,7 @@ public class JdkWebhookClient implements WebhookClient, AutoCloseable {
     @Override
     public void close() {
         httpClient.close();
+        httpExecutor.close();
     }
 
     private static TransportFailure failure(String code, String message) {
