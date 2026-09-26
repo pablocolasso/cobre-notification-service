@@ -46,7 +46,7 @@ public class IngestPlatformEventService implements IngestPlatformEventUseCase {
 
         if (notifications.saveIfAbsent(notification)) {
             metrics.eventReceived("accepted");
-            metrics.notificationCreated(event.eventType());
+            metrics.notificationCreated();
             return IngestionResult.ACCEPTED;
         }
         metrics.eventReceived("duplicate");

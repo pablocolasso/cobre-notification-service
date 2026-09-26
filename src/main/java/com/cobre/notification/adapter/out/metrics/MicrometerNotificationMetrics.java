@@ -30,13 +30,13 @@ public class MicrometerNotificationMetrics implements NotificationMetrics {
     }
 
     @Override
-    public void notificationCreated(String eventType) {
-        registry.counter(CREATED, "event_type", eventType).increment();
+    public void notificationCreated() {
+        registry.counter(CREATED).increment();
     }
 
     @Override
-    public void deliveryAttempt(String outcome, String eventType, Duration duration) {
-        registry.counter(DELIVERY_ATTEMPTS, "outcome", outcome, "event_type", eventType).increment();
+    public void deliveryAttempt(String outcome, Duration duration) {
+        registry.counter(DELIVERY_ATTEMPTS, "outcome", outcome).increment();
         registry.timer(DELIVERY_DURATION, "outcome", outcome).record(duration);
     }
 

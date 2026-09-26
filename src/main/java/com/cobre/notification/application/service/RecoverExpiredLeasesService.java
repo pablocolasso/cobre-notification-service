@@ -43,8 +43,7 @@ public class RecoverExpiredLeasesService implements RecoverExpiredLeasesUseCase 
             DeliveryDecision decision = lifecycle.onLeaseExpired(lease.cycleAttemptNumber(), now);
             if (deliveries.recoverLease(new LeaseRecovery(lease, decision, now))) {
                 recovered++;
-                String eventType = lease.eventType() == null ? "unknown" : lease.eventType();
-                metrics.deliveryAttempt("abandoned", eventType, Duration.ZERO);
+                metrics.deliveryAttempt("abandoned", Duration.ZERO);
                 if (decision.status() == DeliveryStatus.RETRYING) {
                     metrics.retryScheduled();
                 }

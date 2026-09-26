@@ -9,9 +9,9 @@ public interface NotificationMetrics {
 
     void eventReceived(String outcome);
 
-    void notificationCreated(String eventType);
+    void notificationCreated();
 
-    void deliveryAttempt(String outcome, String eventType, Duration duration);
+    void deliveryAttempt(String outcome, Duration duration);
 
     void retryScheduled();
 

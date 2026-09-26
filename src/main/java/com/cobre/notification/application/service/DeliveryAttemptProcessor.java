@@ -117,7 +117,7 @@ public class DeliveryAttemptProcessor {
             case ABANDONED -> "abandoned";
             case IN_PROGRESS -> "retryable_failure";
         };
-        metrics.deliveryAttempt(outcome, task.eventType(), duration);
+        metrics.deliveryAttempt(outcome, duration);
         if (decision.status() == DeliveryStatus.RETRYING) {
             metrics.retryScheduled();
         }

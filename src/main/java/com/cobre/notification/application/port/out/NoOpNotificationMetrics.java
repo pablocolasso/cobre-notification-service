@@ -14,11 +14,11 @@ public final class NoOpNotificationMetrics implements NotificationMetrics {
     }
 
     @Override
-    public void notificationCreated(String eventType) {
+    public void notificationCreated() {
     }
 
     @Override
-    public void deliveryAttempt(String outcome, String eventType, Duration duration) {
+    public void deliveryAttempt(String outcome, Duration duration) {
     }
 
     @Override
