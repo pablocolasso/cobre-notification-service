@@ -40,6 +40,18 @@ class WebhookDestinationGuardTest {
     }
 
     @Test
+    void rejectsIpv4EmbeddedInIpv6() throws Exception {
+        assertRejected(strict(ipv6(mapped(10, 0, 0, 1))), "https://[::ffff:10.0.0.1]/hook", "blocked_address");
+        assertRejected(strict(ipv6(mapped(127, 0, 0, 1))), "https://[::ffff:127.0.0.1]/hook", "blocked_address");
+        assertRejected(strict(ipv6(compatible(127, 0, 0, 1))), "https://[::127.0.0.1]/hook", "blocked_address");
+        assertRejected(strict(ipv6(mapped(169, 254, 169, 254))), "https://[::ffff:169.254.169.254]/hook",
+                "blocked_address");
+
+        WebhookDestinationGuard guard = strict(ipv6(mapped(8, 8, 8, 8)));
+        assertThat(guard.evaluate("https://[::ffff:8.8.8.8]/hook")).isInstanceOf(Decision.Allow.class);
+    }
+
+    @Test
     void rejectsIpv6UniqueLocal() throws Exception {
         byte[] ula = new byte[16];
         ula[0] = (byte) 0xFD;
@@ -152,6 +164,30 @@ class WebhookDestinationGuardTest {
 
     private static InetAddress address(String host, int a, int b, int c, int d) throws UnknownHostException {
         return InetAddress.getByAddress(host, new byte[] {(byte) a, (byte) b, (byte) c, (byte) d});
+    }
+
+    private static InetAddress ipv6(byte[] bytes) throws UnknownHostException {
+        return InetAddress.getByAddress("embedded", bytes);
+    }
+
+    private static byte[] mapped(int a, int b, int c, int d) {
+        byte[] bytes = new byte[16];
+        bytes[10] = (byte) 0xFF;
+        bytes[11] = (byte) 0xFF;
+        bytes[12] = (byte) a;
+        bytes[13] = (byte) b;
+        bytes[14] = (byte) c;
+        bytes[15] = (byte) d;
+        return bytes;
+    }
+
+    private static byte[] compatible(int a, int b, int c, int d) {
+        byte[] bytes = new byte[16];
+        bytes[12] = (byte) a;
+        bytes[13] = (byte) b;
+        bytes[14] = (byte) c;
+        bytes[15] = (byte) d;
+        return bytes;
     }
 
     private static void assertRejected(WebhookDestinationGuard guard, String url, String reason) {

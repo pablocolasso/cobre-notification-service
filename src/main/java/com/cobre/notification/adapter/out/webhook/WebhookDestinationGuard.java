@@ -97,7 +97,7 @@ public class WebhookDestinationGuard {
         if (addresses.length == 0) {
             return new Decision.Reject("unresolvable_host");
         }
-        if (Arrays.stream(addresses).anyMatch(WebhookDestinationGuard::isBlocked)) {
+        if (Arrays.stream(addresses).anyMatch(WebhookDestinationGuard::isBlockedResolved)) {
             return new Decision.Reject("blocked_address");
         }
         return new Decision.Allow();
@@ -112,6 +112,21 @@ public class WebhookDestinationGuard {
             return true;
         }
         return ssrf.extraAllowedPorts().contains(port);
+    }
+
+    /**
+     * Checks the resolved address, and when it is an IPv4-mapped or IPv4-compatible IPv6 address also checks the
+     * embedded IPv4. {@code Inet6Address} does not apply loopback, link-local or site-local rules to that IPv4.
+     */
+    private static boolean isBlockedResolved(InetAddress address) {
+        if (isBlocked(address)) {
+            return true;
+        }
+        if (address instanceof Inet6Address ipv6) {
+            Inet4Address embedded = ipv4Mapped(ipv6);
+            return embedded != null && isBlocked(embedded);
+        }
+        return false;
     }
 
     static boolean isBlocked(InetAddress address) {
