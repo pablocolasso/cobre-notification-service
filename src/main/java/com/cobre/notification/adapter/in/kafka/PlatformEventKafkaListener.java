@@ -37,7 +37,8 @@ class PlatformEventKafkaListener {
     void onMessage(ConsumerRecord<String, String> record) {
         String correlationId = header(record, CORRELATION_ID_HEADER);
         MDC.put("correlation_id", correlationId == null || correlationId.isBlank()
-                ? UUID.randomUUID().toString() : correlationId);
+                ? UUID.randomUUID().toString()
+                : sanitizeCorrelationId(correlationId));
         try {
             PlatformEvent event = mapper.toPlatformEvent(record.value());
             MDC.put("event_id", event.eventId());
@@ -59,6 +60,16 @@ class PlatformEventKafkaListener {
             MDC.remove("client_id");
             MDC.remove("status");
         }
+    }
+
+    private static String sanitizeCorrelationId(String value) {
+        int length = Math.min(value.length(), 64);
+        StringBuilder sanitized = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            char c = value.charAt(i);
+            sanitized.append(c < 0x20 || c == 0x7F ? '_' : c);
+        }
+        return sanitized.toString();
     }
 
     private static String header(ConsumerRecord<String, String> record, String name) {

@@ -88,9 +88,21 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     private static String bindCorrelationId(HttpServletRequest request) {
         String incoming = request.getHeader(REQUEST_ID_HEADER);
-        String correlationId = incoming == null || incoming.isBlank() ? UUID.randomUUID().toString() : incoming;
+        String correlationId = incoming == null || incoming.isBlank()
+                ? UUID.randomUUID().toString()
+                : sanitizeCorrelationId(incoming);
         request.setAttribute(CORRELATION_ID_ATTRIBUTE, correlationId);
         return correlationId;
+    }
+
+    private static String sanitizeCorrelationId(String value) {
+        int length = Math.min(value.length(), 64);
+        StringBuilder sanitized = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            char c = value.charAt(i);
+            sanitized.append(c < 0x20 || c == 0x7F ? '_' : c);
+        }
+        return sanitized.toString();
     }
 
     private void writeUnauthorized(HttpServletResponse response, String correlationId) throws IOException {
